@@ -14,6 +14,7 @@ use App\Http\Controllers\ReceivedMailController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\TagController;
+use App\Http\Controllers\PiggyBankController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VerificationController;
@@ -77,6 +78,11 @@ Route::get('/investment-price/list/{investment}', [InvestmentPriceController::cl
  ********************/
 Route::resource('tag', TagController::class)
     ->except(['show']);
+
+/*******************
+ * Piggy Bank related routes
+ ********************/
+Route::resource('piggy-bank', PiggyBankController::class);
 
 /*******************
  * Transaction related routes

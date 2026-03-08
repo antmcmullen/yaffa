@@ -54,6 +54,11 @@
                 iconClasses="fa-solid fa-tags"
                 text="{{ __('Tags') }}"
             />
+            <x-nav-link
+                href="{{ route('piggy-bank.index') }}"
+                iconClasses="fa-solid fa-piggy-bank"
+                text="{{ __('Piggy Banks') }}"
+            />
         </ul>
     </li>
 

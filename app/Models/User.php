@@ -180,6 +180,11 @@ class User extends Authenticatable implements MustVerifyEmail, Onboardable
         return $this->hasMany(Tag::class);
     }
 
+    public function piggyBanks(): HasMany
+    {
+        return $this->hasMany(PiggyBank::class);
+    }
+
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
