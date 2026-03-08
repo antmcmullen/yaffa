@@ -46,6 +46,7 @@ const routeMap = new Map([
     ['register', 'auth/register'],
     ['login', 'auth/login'],
     ['tag.index', 'tag/index'],
+    ['piggy-bank.index', 'piggy-bank/index'],
     ['user.settings', 'user/settings'],
 ]);
 

@@ -250,3 +250,21 @@ Breadcrumbs::for('user.settings', function (BreadcrumbTrail $trail) {
     $trail->parent('home');
     $trail->push(__('My profile'), route('user.settings'));
 });
+
+// Piggy Bank resource views (index, create, edit, show)
+Breadcrumbs::for('piggy-bank.index', function (BreadcrumbTrail $trail) {
+    $trail->parent('home');
+    $trail->push(__('Piggy Banks'), route('piggy-bank.index'));
+});
+Breadcrumbs::for('piggy-bank.create', function (BreadcrumbTrail $trail) {
+    $trail->parent('piggy-bank.index');
+    $trail->push(__('Create'), route('piggy-bank.create'));
+});
+Breadcrumbs::for('piggy-bank.edit', function (BreadcrumbTrail $trail, $piggyBank) {
+    $trail->parent('piggy-bank.index');
+    $trail->push(__('Edit'), route('piggy-bank.edit', $piggyBank));
+});
+Breadcrumbs::for('piggy-bank.show', function (BreadcrumbTrail $trail, $piggyBank) {
+    $trail->parent('piggy-bank.index');
+    $trail->push($piggyBank->name, route('piggy-bank.show', $piggyBank));
+});
