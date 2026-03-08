@@ -215,6 +215,18 @@ Breadcrumbs::for('reports.transactions', function (BreadcrumbTrail $trail) {
     $trail->push(__('Reports'));
     $trail->push(__('Transactions'), route('reports.transactions'));
 });
+// Account transactions query form
+Breadcrumbs::for('reports.account_transactions.form', function (BreadcrumbTrail $trail) {
+    $trail->parent('home');
+    $trail->push('Reports');
+    $trail->push(__('Account Transactions'), route('reports.account_transactions.form'));
+});
+// Account transactions query run (POST)
+Breadcrumbs::for('reports.account_transactions.run', function (BreadcrumbTrail $trail) {
+    $trail->parent('home');
+    $trail->push('Reports');
+    $trail->push(__('Account Transactions'), route('reports.account_transactions.run'));
+});
 Breadcrumbs::for('reports.investment_timeline', function (BreadcrumbTrail $trail) {
     $trail->parent('home');
     $trail->push(__('Investments'), route('investment.index'));
@@ -245,6 +257,35 @@ Breadcrumbs::for('import.csv', function (BreadcrumbTrail $trail) {
     $trail->push(__('Import transactions'), route('import.csv'));
 });
 
+<<<<<<< Updated upstream
+=======
+// Paperless reconcile
+Breadcrumbs::for('paperless.reconcile.show', function (BreadcrumbTrail $trail) {
+    $trail->parent('home');
+    $trail->push(__('Automations'));
+    $trail->push(__('Paperless Reconcile'), route('paperless.reconcile.show'));
+});
+Breadcrumbs::for('paperless.reconcile.run', function (BreadcrumbTrail $trail) {
+    $trail->parent('home');
+    $trail->push(__('Automations'));
+    $trail->push(__('Paperless Reconcile'), route('paperless.reconcile.run'));
+});
+
+// Imports index
+Breadcrumbs::for('imports.index', function (BreadcrumbTrail $trail) {
+    $trail->parent('home');
+    $trail->push('Automations');
+    $trail->push('Import Jobs', route('imports.index'));
+});
+
+// Payslip upload
+Breadcrumbs::for('payslip.upload', function (BreadcrumbTrail $trail) {
+    $trail->parent('home');
+    $trail->push(__('Automations'));
+    $trail->push(__('Upload Payslips'), route('payslip.upload'));
+});
+
+>>>>>>> Stashed changes
 // User related routes
 Breadcrumbs::for('user.settings', function (BreadcrumbTrail $trail) {
     $trail->parent('home');

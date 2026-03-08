@@ -120,6 +120,17 @@ Route::get('/search', [SearchController::class, 'search'])->name('search');
 // Route for the CSV import functionality
 Route::get('/import/csv', [ImportController::class, 'importCsv'])->middleware(['auth', 'verified'])->name('import.csv');
 
+// Paperless reconcile - auth protected
+Route::middleware(['auth'])->group(function () {
+    Route::get('/paperless/reconcile', [App\Http\Controllers\PaperlessReconcileController::class, 'show'])->name('paperless.reconcile.show');
+    Route::post('/paperless/reconcile', [App\Http\Controllers\PaperlessReconcileController::class, 'run'])->name('paperless.reconcile.run');
+    Route::post('/paperless/reconcile/preview', [App\Http\Controllers\PaperlessReconcileController::class, 'previewDraft'])->name('paperless.reconcile.preview');
+    Route::post('/paperless/reconcile/create-draft', [App\Http\Controllers\PaperlessReconcileController::class, 'createDraft'])->name('paperless.reconcile.createDraft');
+    // Account transactions SQL query UI
+    Route::get('/reports/account-transactions-query', [App\Http\Controllers\AccountTransactionsQueryController::class, 'form'])->name('reports.account_transactions.form');
+    Route::post('/reports/account-transactions-query', [App\Http\Controllers\AccountTransactionsQueryController::class, 'run'])->name('reports.account_transactions.run');
+});
+
 // User related routes
 Route::get('/user/settings', [UserController::class, 'settings'])->name('user.settings');
 

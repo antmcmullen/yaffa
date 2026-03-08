@@ -40,6 +40,17 @@ class InvestmentGroup extends Model
      */
     protected $fillable = [
         'name',
+<<<<<<< Updated upstream
+=======
+        'user_id',
+        'generates_interest',
+        'auto_invest',
+    ];
+
+    protected $casts = [
+        'generates_interest' => 'boolean',
+        'auto_invest' => 'boolean',
+>>>>>>> Stashed changes
     ];
 
     public function user(): BelongsTo

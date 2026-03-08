@@ -12,6 +12,9 @@ import axios from 'axios';
 window.axios = axios;
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
+// Ensure Axios sends cookies for same-site requests so Sanctum cookie auth works
+window.axios.defaults.withCredentials = true;
+
 if (window.csrfToken) {
     window.axios.defaults.headers.common['X-CSRF-TOKEN'] = window.csrfToken;
 } else {

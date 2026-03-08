@@ -75,6 +75,7 @@ class AccountEntity extends Model
         'config_id',
         'user_id',
         'alias',
+        'default_investment_id',
     ];
 
     protected $hidden = ['config_id'];
@@ -200,6 +201,11 @@ class AccountEntity extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function defaultInvestment(): BelongsTo
+    {
+        return $this->belongsTo(Investment::class, 'default_investment_id');
     }
 
     public function isAccount(): bool

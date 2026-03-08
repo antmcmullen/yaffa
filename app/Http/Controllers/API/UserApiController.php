@@ -57,6 +57,7 @@ class UserApiController extends Controller implements HasMiddleware
                 'start_date' => $user->start_date,
                 'end_date' => $user->end_date,
                 'account_details_date_range' => $user->account_details_date_range,
+                'enable_investments' => $user->enable_investments,
             ]
         ]);
     }

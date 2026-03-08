@@ -90,6 +90,12 @@ class AppServiceProvider extends ServiceProvider
 
     public function bootEvent(): void
     {
+<<<<<<< Updated upstream
 
+=======
+        Transaction::observe(TransactionObserver::class);
+        \App\Models\TransactionDetailStandard::observe(\App\Observers\TransactionDetailObserver::class);
+        \App\Models\TransactionDetailInvestment::observe(\App\Observers\TransactionDetailObserver::class);
+>>>>>>> Stashed changes
     }
 }

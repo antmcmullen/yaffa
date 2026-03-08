@@ -23,7 +23,13 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->statefulApi();
-        $middleware->api(\App\Http\Middleware\SetLocale::class);
+        // Include the checkpoint trace middleware for API routes. The middleware
+        // itself checks the `yaffa.balance_checkpoint_trace_enabled` config and
+        // is a no-op when disabled.
+        $middleware->api(
+            \App\Http\Middleware\CheckpointTraceMiddleware::class,
+            \App\Http\Middleware\SetLocale::class
+        );
 
         $middleware->alias([
             'auth' => \App\Http\Middleware\Authenticate::class,

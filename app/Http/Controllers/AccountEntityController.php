@@ -201,7 +201,16 @@ class AccountEntityController extends Controller implements HasMiddleware
             return to_route('currency.create');
         }
 
-        return view('account.form');
+        // Provide user's investments for possible default selection
+        $allInvestments = Auth::user()->investments()
+            ->where('active', true)
+            ->whereHas('investmentGroup', function ($q) {
+                $q->where('auto_invest', true);
+            })
+            ->pluck('name', 'id')
+            ->all();
+
+        return view('account.form', ['allInvestments' => $allInvestments]);
     }
 
     private function createPayee(): View
@@ -312,6 +321,13 @@ class AccountEntityController extends Controller implements HasMiddleware
                 'account' => $accountEntity,
                 'allAccountGroups' => $allAccountGroups,
                 'allCurrencies' => $allCurrencies,
+                'allInvestments' => Auth::user()->investments()
+                    ->where('active', true)
+                    ->whereHas('investmentGroup', function ($q) {
+                        $q->where('auto_invest', true);
+                    })
+                    ->pluck('name', 'id')
+                    ->all(),
             ]
         );
     }

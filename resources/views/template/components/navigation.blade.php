@@ -7,10 +7,12 @@
     </li>
 
     <li class="nav-item">
-        <a class="nav-link" href="{{ route('investment.index') }}">
-            <i class="nav-icon fa-solid fa-chart-line"></i>
-            {{ __('Investments') }}
-        </a>
+        @if(Auth::user()->enable_investments)
+            <a class="nav-link" href="{{ route('investment.index') }}">
+                <i class="nav-icon fa-solid fa-chart-line"></i>
+                {{ __('Investments') }}
+            </a>
+        @endif
     </li>
 
     <li class="nav-group">
@@ -39,11 +41,13 @@
                 iconClasses="fa-solid fa-briefcase"
                 text="{{ __('Payees') }}"
             />
-            <x-nav-link
-                href="{{ route('investment-group.index') }}"
-                iconClasses="fa-solid fa-layer-group"
-                text="{{ __('Investment groups') }}"
-            />
+            @if(Auth::user()->enable_investments)
+                <x-nav-link
+                    href="{{ route('investment-group.index') }}"
+                    iconClasses="fa-solid fa-layer-group"
+                    text="{{ __('Investment groups') }}"
+                />
+            @endif
             <x-nav-link
                 href="{{ route('categories.index') }}"
                 iconClasses="fa-solid fa-folder-open"
@@ -122,11 +126,13 @@
                 iconClasses="fa-solid fa-cart-plus"
                 text="{{ __('New transaction') }}"
             />
-            <x-nav-link
-                href="{{ route('transaction.create', ['type' => 'investment']) }}"
-                iconClasses="fa-solid fa-chart-line"
-                text="{{ __('New investment transaction') }}"
-            />
+            @if(Auth::user()->enable_investments)
+                <x-nav-link
+                    href="{{ route('transaction.create', ['type' => 'investment']) }}"
+                    iconClasses="fa-solid fa-chart-line"
+                    text="{{ __('New investment transaction') }}"
+                />
+            @endif
         </ul>
     </li>
 </ul>

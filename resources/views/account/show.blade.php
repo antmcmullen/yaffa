@@ -160,8 +160,10 @@
                 <div class="d-none d-lg-block">
                     <button type="button" id="create-standard-transaction-button" class="btn btn-sm btn-success"
                         title="{{ __('New standard transaction') }}"><i class="fa fa-cart-plus"></i></button>
-                    <button type="button" id="create-investment-transaction-button" class="btn btn-sm btn-success"
-                        title="{{ __('New investment transaction') }}"><i class="fa fa-line-chart"></i></button>
+                    @if(Auth::user()->enable_investments)
+                        <button type="button" id="create-investment-transaction-button" class="btn btn-sm btn-success"
+                            title="{{ __('New investment transaction') }}"><i class="fa fa-line-chart"></i></button>
+                    @endif
                 </div>
             </div>
             <div class="card-body">
@@ -181,12 +183,14 @@
     'schedule' => 1,
     'callback' => 'back'
 ]) }}" title="{{ __('New scheduled transaction') }}"><i class="fa fa-cart-plus"></i></a>
-                    <a class="btn btn-sm btn-success" href="{{ route('transaction.create', [
+                    @if(Auth::user()->enable_investments)
+                        <a class="btn btn-sm btn-success" href="{{ route('transaction.create', [
     'type' => 'investment',
     'account' => $account->id,
     'schedule' => 1,
     'callback' => 'back'
 ]) }}" title="{{ __('New scheduled investment transaction') }}"><i class="fa fa-line-chart"></i></a>
+                    @endif
                 </div>
             </div>
             <div class="card-body">
@@ -199,7 +203,9 @@
 <div id="app">
     <transaction-show-modal></transaction-show-modal>
     <transaction-create-standard-modal></transaction-create-standard-modal>
-    <transaction-create-investment-modal></transaction-create-investment-modal>
+    @if(Auth::user()->enable_investments)
+        <transaction-create-investment-modal></transaction-create-investment-modal>
+    @endif
 </div>
 
 @include('template.components.model-delete-form')

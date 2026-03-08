@@ -23,6 +23,7 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
             'language' => $this->faker->randomElement(array_keys(config('app.available_languages'))),
             'locale' => $this->faker->randomElement(array_keys(config('app.available_locales'))),
+            'enable_investments' => true,
         ];
     }
 }

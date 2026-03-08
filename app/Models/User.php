@@ -103,6 +103,7 @@ class User extends Authenticatable implements MustVerifyEmail, Onboardable
         'start_date',
         'end_date',
         'account_details_date_range',
+        'enable_investments',
     ];
 
     /**
@@ -130,6 +131,7 @@ class User extends Authenticatable implements MustVerifyEmail, Onboardable
             'email_verified_at' => 'datetime',
             'start_date' => 'datetime',
             'end_date' => 'datetime',
+            'enable_investments' => 'boolean',
         ];
     }
 

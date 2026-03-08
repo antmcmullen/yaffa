@@ -413,6 +413,23 @@ class TransactionApiController extends Controller implements HasMiddleware
             $transaction = new Transaction($validated);
             $transaction->user_id = $request->user()->id;
             $transaction->config()->associate($transactionDetails);
+
+            // Validate against balance checkpoints before persisting
+            $checkpointSvc = new \App\Services\BalanceCheckpointService();
+            // Treat as update-style validation to avoid timing/state differences
+            $validation = $checkpointSvc->validateTransaction($transaction, true);
+
+            Log::info('storeStandard: balance checkpoint validation', [
+                'user_id' => $request->user()->id,
+                'validated' => $validated,
+                'validation' => $validation,
+            ]);
+
+            if (! $validation['valid']) {
+                Log::error('storeStandard: blocked by balance checkpoint', ['message' => $validation['message'], 'checkpoint' => $validation['checkpoint']]);
+                throw \Illuminate\Validation\ValidationException::withMessages(['balance_checkpoint' => [$validation['message'] ?? 'Transaction blocked by balance checkpoint']]);
+            }
+
             $transaction->push();
 
             $transactionItems = $this->processTransactionItem($validated['items'], $transaction->id);
@@ -431,6 +448,16 @@ class TransactionApiController extends Controller implements HasMiddleware
             $transaction->transactionItems()->saveMany($transactionItems);
 
             $transaction->push();
+
+            // Post-persist validation (treat as update) to catch cases where pre-persist
+            // validation may miss violations due to timing/state differences. Throwing
+            // here will rollback the DB transaction.
+            $postValidation = $checkpointSvc->validateTransaction($transaction, true);
+            Log::info('storeStandard: post-persist balance checkpoint validation', ['validation' => $postValidation]);
+            if (! $postValidation['valid']) {
+                Log::error('storeStandard: blocked by post-persist balance checkpoint', ['message' => $postValidation['message']]);
+                throw \Illuminate\Validation\ValidationException::withMessages(['balance_checkpoint' => [$postValidation['message'] ?? 'Transaction blocked by balance checkpoint (post-persist)']]);
+            }
 
             if ($transaction->schedule || $transaction->budget) {
                 $transactionSchedule = new TransactionSchedule(['transaction_id' => $transaction->id]);
@@ -479,7 +506,33 @@ class TransactionApiController extends Controller implements HasMiddleware
             $transaction->user_id = $request->user()->id;
             $transaction->config()->associate($transactionDetails);
 
+            // Validate against balance checkpoints before persisting
+            $checkpointSvc = new \App\Services\BalanceCheckpointService();
+            // Treat as update-style validation to avoid timing/state differences
+            $validation = $checkpointSvc->validateTransaction($transaction, true);
+
+            Log::info('storeInvestment: balance checkpoint validation', [
+                'user_id' => $request->user()->id,
+                'validated' => $validated,
+                'validation' => $validation,
+            ]);
+
+            if (! $validation['valid']) {
+                Log::error('storeInvestment: blocked by balance checkpoint', ['message' => $validation['message'], 'checkpoint' => $validation['checkpoint']]);
+                throw \Illuminate\Validation\ValidationException::withMessages(['balance_checkpoint' => [$validation['message'] ?? 'Transaction blocked by balance checkpoint']]);
+            }
+
             $transaction->push();
+
+            // Post-persist validation (treat as update) to catch cases where pre-persist
+            // validation may miss violations due to timing/state differences. Throwing
+            // here will rollback the DB transaction.
+            $postValidation = $checkpointSvc->validateTransaction($transaction, true);
+            Log::info('storeInvestment: post-persist balance checkpoint validation', ['validation' => $postValidation]);
+            if (! $postValidation['valid']) {
+                Log::error('storeInvestment: blocked by post-persist balance checkpoint', ['message' => $postValidation['message']]);
+                throw \Illuminate\Validation\ValidationException::withMessages(['balance_checkpoint' => [$postValidation['message'] ?? 'Transaction blocked by balance checkpoint (post-persist)']]);
+            }
 
             if ($transaction->schedule) {
                 $transactionSchedule = new TransactionSchedule(

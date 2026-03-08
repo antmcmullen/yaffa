@@ -16,6 +16,19 @@ return [
     'gtm_container_id' => env('GTM_CONTAINER_ID'),
     'cookieyes_id' => env('COOKIEYES_ID'),
 
+<<<<<<< Updated upstream
+=======
+    // NLP Service settings
+    'nlp_service_url' => env('NLP_SERVICE_URL', 'http://nlp-service:8083'),
+    'nlp_service_timeout' => env('NLP_SERVICE_TIMEOUT', 30),
+
+    // Balance checkpoint and reconciliation settings
+    'balance_checkpoint_enabled' => env('BALANCE_CHECKPOINT_ENABLED', true),
+
+    // When enabled, incoming API requests will record a trace entry to
+    // storage/logs/checkpoint_request_trace.log to help debug UI clone/create sequences.
+    'balance_checkpoint_trace_enabled' => env('BALANCE_CHECKPOINT_TRACE', false),
+>>>>>>> Stashed changes
     // These are not actual config values, but a list of supported date presets for account details.
     // The default / empty value is not added, as it behaves differently in various places.
     // Translations for the labels are handled in the view.

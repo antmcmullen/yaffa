@@ -53,12 +53,14 @@
                 <div class="list-group-item border-start-4 border-start-dark bg-light text-center fw-bold text-medium-emphasis text-uppercase small">
                     {{ __('New assets') }}
                 </div>
-                <div class="list-group-item border-start-4 border-start-secondary list-group-item-divider">
-                    <a class="nav-link" href="{{ route('investment.create') }}">
-                        <i class="fa fa-2x fa-chart-line text-secondary me-2"></i>
-                        {{ __('New investment') }}
-                    </a>
-                </div>
+                @if(Auth::user()->enable_investments)
+                    <div class="list-group-item border-start-4 border-start-secondary list-group-item-divider">
+                        <a class="nav-link" href="{{ route('investment.create') }}">
+                            <i class="fa fa-2x fa-chart-line text-secondary me-2"></i>
+                            {{ __('New investment') }}
+                        </a>
+                    </div>
+                @endif
                 <div class="list-group-item border-start-4 border-start-primary list-group-item-divider">
                     <a class="nav-link" href="{{ route('account-entity.create', ['type' => 'payee']) }}">
                         <i class="fa fa-2x fa-briefcase text-primary me-2"></i>

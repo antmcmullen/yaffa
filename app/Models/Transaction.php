@@ -20,6 +20,8 @@ use Recurr\Rule;
 use Recurr\Transformer\ArrayTransformer;
 use Recurr\Transformer\ArrayTransformerConfig;
 use Recurr\Transformer\Constraint\BetweenConstraint;
+use App\Services\BalanceCheckpointService;
+use Illuminate\Validation\ValidationException;
 
 /**
  * App\Models\Transaction
@@ -363,5 +365,42 @@ class Transaction extends Model
         }
 
         return $scheduleInstances;
+    }
+
+    /**
+     * Override saveQuietly to ensure balance checkpoint validation still runs
+     * when code saves transactions without firing model events.
+     */
+    public function saveQuietly(array $options = [])
+    {
+        // Only validate if balance checkpointing is enabled
+        $balanceService = new BalanceCheckpointService();
+
+        if ($balanceService->isEnabled()) {
+            // Skip scheduled/budget transactions inside the service
+            // Determine whether this is an update or create
+            // Force update-style validation so creates are evaluated against checkpoints
+            // using the same exclusion logic as updates (prevents timing/state bypasses)
+            $isUpdate = true;
+
+            // If the transaction is reconciled and attempting to modify, block according to service
+            $modifyCheck = $balanceService->canModifyTransaction($this, $isUpdate ? 'update' : 'create');
+
+            if (! $modifyCheck['can_modify']) {
+                throw ValidationException::withMessages([
+                    'transaction' => [$modifyCheck['reason']],
+                ]);
+            }
+
+            $validation = $balanceService->validateTransaction($this, $isUpdate);
+
+            if (! $validation['valid']) {
+                throw ValidationException::withMessages([
+                    'date' => [$validation['message'] ?? 'Transaction violates balance checkpoint'],
+                ]);
+            }
+        }
+
+        return parent::saveQuietly($options);
     }
 }

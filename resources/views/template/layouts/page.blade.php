@@ -117,4 +117,12 @@
         </div>
     </footer>
 </div>
+@auth
+    <script>
+        window.YAFFA = window.YAFFA || {};
+        if (typeof window.YAFFA.enable_investments === 'undefined') {
+            window.YAFFA.enable_investments = {{ Auth::user()->enable_investments ? 'true' : 'false' }};
+        }
+    </script>
+@endauth
 @stop

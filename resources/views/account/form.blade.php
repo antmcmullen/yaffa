@@ -157,6 +157,46 @@
                 </div>
             </div>
 
+            @if(Auth::user()->enable_investments)
+                <div class="row mb-3">
+                    <label for="default_investment_id" class="col-form-label col-sm-3">
+                        {{ __('Default investment') }}
+                    </label>
+                    <div class="col-sm-9 d-flex align-items-start gap-2">
+                        <select
+                            class="form-select"
+                            id="default_investment_id"
+                            name="default_investment_id"
+                            style="max-width:70%"
+                        >
+                            <option value="">{{ __('None') }}</option>
+                            @forelse(($allInvestments ?? []) as $id => $name)
+                                <option
+                                    value="{{ $id }}"
+                                    @if (old())
+                                        @if (old('default_investment_id') == $id)
+                                            selected="selected"
+                                        @endif
+                                    @elseif(isset($account))
+                                        @if (($account->default_investment_id ?? null) == $id)
+                                            selected="selected"
+                                        @endif
+                                    @endif
+                                >
+                                    {{ $name }}
+                                </option>
+                            @empty
+
+                            @endforelse
+                        </select>
+
+                        <a id="default_investment_link" class="btn btn-outline-secondary" target="_blank" href="#">
+                            {{ __('View investment') }}
+                        </a>
+                    </div>
+                </div>
+            @endif
+
             <div class="row mb-3">
                 <label for="alias" class="col-form-label col-sm-3">
                     {{ __('Import alias') }}
@@ -215,4 +255,36 @@
         </div>
     </div>
 </form>
+<script>
+    (function () {
+        const select = document.getElementById('default_investment_id');
+        const link = document.getElementById('default_investment_link');
+
+        function updateLink() {
+            const val = select.value;
+            if (!val) {
+                link.href = '#';
+                link.classList.add('disabled');
+                return;
+            }
+            if (window.route) {
+                try {
+                    link.href = window.route('investment.show', val);
+                    link.classList.remove('disabled');
+                } catch (e) {
+                    link.href = '/investment/' + val;
+                    link.classList.remove('disabled');
+                }
+            } else {
+                link.href = '/investment/' + val;
+                link.classList.remove('disabled');
+            }
+        }
+
+        if (select) {
+            select.addEventListener('change', updateLink);
+            updateLink();
+        }
+    })();
+</script>
 @stop

@@ -63,6 +63,10 @@ class AccountEntityRequest extends FormRequest
                             ->all()
                     )
                 ],
+                'default_investment_id' => [
+                    'nullable',
+                    Rule::exists('investments', 'id')->where(fn ($query) => $query->where('user_id', $this->user()->id)),
+                ],
             ]);
         }
 

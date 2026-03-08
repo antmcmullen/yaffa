@@ -43,6 +43,10 @@ class UserRequest extends FormRequest
                         ->all()
                 )
             ],
+            'enable_investments' => [
+                'sometimes',
+                'boolean',
+            ],
         ];
     }
 }
