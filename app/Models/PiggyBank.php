@@ -17,8 +17,8 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $user_id
  * @property string $name
- * @property int $target_amount
- * @property int $current_amount
+ * @property float $target_amount
+ * @property float $current_amount
  * @property Carbon|null $start_date
  * @property Carbon|null $target_date
  * @property string|null $notes
