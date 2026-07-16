@@ -329,6 +329,56 @@ class TransactionFormInvestmentStandaloneTest extends DuskTestCase
         });
     }
 
+    public function test_user_can_calculate_price_from_cashflow_in_create_flow(): void
+    {
+        $this->browse(function (Browser $browser) {
+            $browser->loginAs($this->user)
+                ->visitRoute('transaction.create', ['type' => 'investment'])
+                ->waitFor(self::MAIN_FORM_SELECTOR)
+                ->waitFor(self::ACCOUNT_DROPDOWN_SELECTOR, 10)
+                ->waitFor(self::INVESTMENT_DROPDOWN_SELECTOR, 10)
+                ->select2ExactSearch(self::ACCOUNT_DROPDOWN_SELECTOR, self::TEST_ACCOUNT_NAME_USD, 10)
+                ->select2ExactSearch(self::INVESTMENT_DROPDOWN_SELECTOR, self::TEST_INVESTMENT_NAME_USD, 10)
+                ->select('#transaction_type', 'buy')
+                ->type('#transaction_quantity', '10')
+                ->type('#transaction_commission', '30')
+                ->type('#transaction_tax', '40')
+                ->waitFor('#calc_price_button', 10);
+
+            $browser->script("window.prompt = () => '270';");
+
+            $browser->click('#calc_price_button');
+
+            $priceValue = (float) $browser->script("return document.querySelector('#transaction_price').value;")[0];
+            $this->assertEquals(20.0, $priceValue);
+        });
+    }
+
+    public function test_user_can_calculate_price_for_sell_with_zero_cashflow(): void
+    {
+        $this->browse(function (Browser $browser) {
+            $browser->loginAs($this->user)
+                ->visitRoute('transaction.create', ['type' => 'investment'])
+                ->waitFor(self::MAIN_FORM_SELECTOR)
+                ->waitFor(self::ACCOUNT_DROPDOWN_SELECTOR, 10)
+                ->waitFor(self::INVESTMENT_DROPDOWN_SELECTOR, 10)
+                ->select2ExactSearch(self::ACCOUNT_DROPDOWN_SELECTOR, self::TEST_ACCOUNT_NAME_USD, 10)
+                ->select2ExactSearch(self::INVESTMENT_DROPDOWN_SELECTOR, self::TEST_INVESTMENT_NAME_USD, 10)
+                ->select('#transaction_type', 'sell')
+                ->type('#transaction_quantity', '0.004')
+                ->type('#transaction_commission', '0.21')
+                ->type('#transaction_tax', '0')
+                ->waitFor('#calc_price_button', 10);
+
+            $browser->script("window.prompt = () => '0';");
+
+            $browser->click('#calc_price_button');
+
+            $priceValue = (float) $browser->script("return document.querySelector('#transaction_price').value;")[0];
+            $this->assertEquals(52.5, $priceValue);
+        });
+    }
+
     public function test_user_can_submit_transaction_with_schedule(): void
     {
         $this->markTestIncomplete('Not implemented yet.');
@@ -365,7 +415,16 @@ class TransactionFormInvestmentStandaloneTest extends DuskTestCase
                     'action' => 'clone',
                     'transaction' => $transaction->id
                 ]
-            );
+            )
+                ->waitFor('#calc_price_button', 10)
+                ->assertVisible('#calc_price_button');
+
+            $browser->script("window.prompt = () => '300';");
+
+            $browser->click('#calc_price_button');
+
+            $priceValue = (float) $browser->script("return document.querySelector('#transaction_price').value;")[0];
+            $this->assertEquals(23.0, $priceValue);
         });
     }
 

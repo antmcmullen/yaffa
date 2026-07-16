@@ -301,6 +301,18 @@
                       >
                         {{ __('Store price') }}
                       </label>
+                      <button
+                        class="btn btn-outline-secondary"
+                        id="calc_price_button"
+                        type="button"
+                        :title="
+                          __('Calculate price from cashflow, commission, tax and quantity')
+                        "
+                        v-if="shouldShowCalcPriceButton"
+                        @click="calculatePriceFromCashflow"
+                      >
+                        {{ __('Calc price') }}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -689,6 +701,13 @@
           this.transactionTypeSettings.price &&
           // At the moment, overwriting is not supported
           !this.existingPriceForDate
+        );
+      },
+
+      shouldShowCalcPriceButton() {
+        return (
+          ['create', 'clone', 'finalize'].includes(this.action) &&
+          this.transactionTypeSettings.price
         );
       },
     },
@@ -1233,6 +1252,83 @@
         this.priceCheckTimeout = setTimeout(() => {
           this.checkExistingPrice();
         }, 500);
+      },
+
+      toNumericValue(value) {
+        const numericValue = Number(value);
+
+        return Number.isFinite(numericValue) ? numericValue : 0;
+      },
+
+      calculatePriceFromCashflow() {
+        const quantity = this.toNumericValue(this.form.config.quantity);
+
+        if (quantity === 0) {
+          toastHelpers.showWarningToast(
+            __('Enter quantity first to calculate the price'),
+          );
+          return;
+        }
+
+        const cashflowPromptValue = window.prompt(
+          __('Enter total cashflow value'),
+        );
+
+        if (cashflowPromptValue === null) {
+          return;
+        }
+
+        const normalizedCashflowValue = String(cashflowPromptValue).trim();
+
+        if (normalizedCashflowValue === '') {
+          toastHelpers.showWarningToast(__('Please enter a valid cashflow value'));
+          return;
+        }
+
+        const cashflow = Number(normalizedCashflowValue);
+
+        if (!Number.isFinite(cashflow)) {
+          toastHelpers.showWarningToast(__('Please enter a valid cashflow value'));
+          return;
+        }
+
+        const commission = this.toNumericValue(this.form.config.commission);
+        const tax = this.toNumericValue(this.form.config.tax);
+        const amountMultiplier = this.toNumericValue(
+          this.transactionTypeSettings.amount_multiplier,
+        );
+        const commissionMultiplier = this.toNumericValue(
+          this.transactionTypeSettings.commission_multiplier,
+        );
+        const taxMultiplier = this.toNumericValue(
+          this.transactionTypeSettings.tax_multiplier,
+        );
+
+        if (amountMultiplier === 0) {
+          toastHelpers.showWarningToast(
+            __('Price cannot be calculated for this transaction type'),
+          );
+          return;
+        }
+
+        // Inverse of total formula:
+        // cashflow = qty*price*amountMultiplier + commission*commissionMultiplier + tax*taxMultiplier
+        const numerator =
+          cashflow -
+          commission * commissionMultiplier -
+          tax * taxMultiplier;
+        const denominator = quantity * amountMultiplier;
+        const calculatedPrice = numerator / denominator;
+
+        if (!Number.isFinite(calculatedPrice) || calculatedPrice <= 0) {
+          toastHelpers.showWarningToast(
+            __('Calculated price must be greater than zero'),
+          );
+          return;
+        }
+
+        this.form.config.price = Number(calculatedPrice.toFixed(10));
+        this.onPriceChange();
       },
 
       async storePriceIfEnabled(transaction) {
