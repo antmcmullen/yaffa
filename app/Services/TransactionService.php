@@ -202,13 +202,13 @@ class TransactionService
             $terms[] = $config->price->multipliedBy($config->quantity, RoundingMode::HalfUp)->multipliedBy($multiplier);
         }
         if ($config->dividend !== null) {
-            $terms[] = $config->dividend;
+            $terms[] = $config->dividend->multipliedBy($transaction->transaction_type->dividendMultiplier());
         }
         if ($config->tax !== null) {
-            $terms[] = $config->tax->negated();
+            $terms[] = $config->tax->multipliedBy($transaction->transaction_type->taxMultiplier());
         }
         if ($config->commission !== null) {
-            $terms[] = $config->commission->negated();
+            $terms[] = $config->commission->multipliedBy($transaction->transaction_type->commissionMultiplier());
         }
 
         if ($terms === []) {

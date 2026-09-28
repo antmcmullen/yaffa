@@ -1,0 +1,13 @@
+diff a/resources/views/template/components/navigation.blade.php b/resources/views/template/components/navigation.blade.php	(rejected hunks)
+@@ -80,6 +80,11 @@
+                 iconClasses="fa-solid fa-chart-line"
+                 text="{{ __('Cash flow') }}"
+             />
++            <x-nav-link
++                href="{{ route('reports.advanced-reconcile') }}"
++                iconClasses="fa-solid fa-scale-balanced"
++                text="{{ __('Advanced reconcile') }}"
++            />
+             <x-nav-link
+                 href="{{ route('reports.budgetchart') }}"
+                 iconClasses="fa-solid fa-chart-line"

@@ -1,0 +1,49 @@
+diff a/resources/js/account/show.js b/resources/js/account/show.js	(rejected hunks)
+@@ -3,6 +3,7 @@ import 'datatables.net-responsive-bs5';
+ 
+ import * as dataTableHelpers from '@/shared/lib/datatable';
+ import * as helpers from '@/shared/lib/helpers';
++import { escapeHtml, jsonFromResponse } from '@/shared/lib/helpers';
+ import { getDataTablesLanguageOptions, toFormattedCurrency } from '@/shared/lib/i18n';
+ import * as toastHelpers from '@/shared/lib/toast';
+ import { initializeTwoColumnLeftControlPanelToggle } from '@/shared/lib/ui/leftControlPanelToggle';
+@@ -13,6 +14,31 @@ const selectorHistoryTable = '#historyTable';
+ const selectorLeftControlPanel = '#accountLeftControlPanel';
+ const selectorMainContent = '#accountMainContent';
+ const selectorLeftControlPanelToggleButton = '#toggleAccountLeftControlPanelButton';
++const reconcileSectionLabels = {
++    cash: {
++        opening_balance: __('Opening balance'),
++        total_withdrawals: __('Total withdrawals'),
++        total_deposits: __('Total deposits'),
++        balance: __('Balance'),
++        checkpoint_value: __('Checkpoint value'),
++        variance: __('Variance / Match'),
++    },
++    investment: {
++        opening_value: __('Opening investment value'),
++        closing_value: __('Closing investment value'),
++        checkpoint_value: __('Checkpoint value'),
++        variance: __('Variance / Match'),
++    },
++    total: {
++        balance: __('Balance'),
++        checkpoint_value: __('Checkpoint value'),
++        variance: __('Variance / Match'),
++    },
++};
++
++let advancedReconcileData = null;
++let advancedReconcilePriceModal = null;
++let advancedReconcilePriceContext = null;
+ 
+ let currentDateFilters = {
+     dateFrom: window.filters?.date_from || null,
+@@ -463,6 +512,7 @@ const dateRangeApp = createApp({
+             initialDateFrom: currentDateFilters.dateFrom,
+             initialDateTo: currentDateFilters.dateTo,
+             initialPreset: currentDateFilters.preset,
++            presetGroups: accountDatePresetGroups(),
+         };
+     },
+     methods: {

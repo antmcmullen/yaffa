@@ -333,6 +333,18 @@
                       >
                         {{ __('Store price') }}
                       </label>
+                      <button
+                        class="btn btn-outline-secondary"
+                        id="calc_price_button"
+                        type="button"
+                        :title="
+                          __('Calculate price from cashflow, commission, tax and quantity')
+                        "
+                        v-if="shouldShowCalcPriceButton"
+                        @click="calculatePriceFromCashflow"
+                      >
+                        {{ __('Calc price') }}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -682,13 +694,10 @@
 
         return quantity
           .times(price)
-          .plus(dividend)
-          .minus(
-            commission
-              .plus(tax)
-              // Taxes and commissions are added to the value when the transaction is a buy
-              .times(this.transactionTypeSettings.amount_multiplier || 0),
-          )
+            .times(this.transactionTypeSettings.amount_multiplier || 0)
+            .plus(dividend.times(this.transactionTypeSettings.dividend_multiplier ?? 1))
+            .plus(commission.times(this.transactionTypeSettings.commission_multiplier ?? -1))
+            .plus(tax.times(this.transactionTypeSettings.tax_multiplier ?? -1))
           .toNumber();
       },
 
@@ -763,6 +772,10 @@
       // Do we allow the user to edit the base settings?
       isBaseSettingsEditsAllowed() {
         return ['create', 'clone', 'finalize'].includes(this.action);
+      },
+
+      shouldShowCalcPriceButton() {
+        return this.isBaseSettingsEditsAllowed && this.transactionTypeSettings.price;
       },
 
       // Should we show the "Store this as a price" checkbox?
@@ -855,8 +868,15 @@
             type.value,
           ),
           price: ['buy', 'sell'].includes(type.value),
-          dividend: ['dividend', 'interest_yield'].includes(type.value),
+          dividend: [
+            'dividend',
+            'interest_yield',
+            'purchased_interest',
+          ].includes(type.value),
           amount_multiplier: type.amount_multiplier,
+          dividend_multiplier: type.dividend_multiplier,
+          commission_multiplier: type.commission_multiplier,
+          tax_multiplier: type.tax_multiplier,
         }));
 
       // Copy values of existing transaction into component form data
@@ -1449,6 +1469,83 @@
         this.priceCheckTimeout = setTimeout(() => {
           this.checkExistingPrice();
         }, 500);
+      },
+
+      toNumericValue(value) {
+        const numericValue = Number(value);
+
+        return Number.isFinite(numericValue) ? numericValue : 0;
+      },
+
+      calculatePriceFromCashflow() {
+        const quantity = this.toNumericValue(this.form.config.quantity);
+
+        if (quantity === 0) {
+          toastHelpers.showWarningToast(
+            __('Enter quantity first to calculate the price'),
+          );
+          return;
+        }
+
+        const cashflowPromptValue = window.prompt(
+          __('Enter total cashflow value'),
+        );
+
+        if (cashflowPromptValue === null) {
+          return;
+        }
+
+        const normalizedCashflowValue = String(cashflowPromptValue).trim();
+
+        if (normalizedCashflowValue === '') {
+          toastHelpers.showWarningToast(__('Please enter a valid cashflow value'));
+          return;
+        }
+
+        const cashflow = Number(normalizedCashflowValue);
+
+        if (!Number.isFinite(cashflow)) {
+          toastHelpers.showWarningToast(__('Please enter a valid cashflow value'));
+          return;
+        }
+
+        const commission = this.toNumericValue(this.form.config.commission);
+        const tax = this.toNumericValue(this.form.config.tax);
+        const amountMultiplier = this.toNumericValue(
+          this.transactionTypeSettings.amount_multiplier,
+        );
+        const commissionMultiplier = this.toNumericValue(
+          this.transactionTypeSettings.commission_multiplier,
+        );
+        const taxMultiplier = this.toNumericValue(
+          this.transactionTypeSettings.tax_multiplier,
+        );
+
+        if (amountMultiplier === 0) {
+          toastHelpers.showWarningToast(
+            __('Price cannot be calculated for this transaction type'),
+          );
+          return;
+        }
+
+        // Inverse of total formula:
+        // cashflow = qty*price*amountMultiplier + commission*commissionMultiplier + tax*taxMultiplier
+        const numerator =
+          cashflow -
+          commission * commissionMultiplier -
+          tax * taxMultiplier;
+        const denominator = quantity * amountMultiplier;
+        const calculatedPrice = numerator / denominator;
+
+        if (!Number.isFinite(calculatedPrice) || calculatedPrice <= 0) {
+          toastHelpers.showWarningToast(
+            __('Calculated price must be greater than zero'),
+          );
+          return;
+        }
+
+        this.form.config.price = Number(calculatedPrice.toFixed(10));
+        this.onPriceChange();
       },
 
       async storePriceIfEnabled(transaction) {

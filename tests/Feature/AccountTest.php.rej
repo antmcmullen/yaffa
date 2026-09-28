@@ -1,0 +1,9 @@
+diff a/tests/Feature/AccountTest.php b/tests/Feature/AccountTest.php	(rejected hunks)
+@@ -3,6 +3,7 @@
+ namespace Tests\Feature;
+ 
+ use App\Models\Account;
++use App\Models\AccountBalanceCheckpoint;
+ use App\Models\AccountEntity;
+ use App\Models\AccountGroup;
+ use App\Models\Currency;

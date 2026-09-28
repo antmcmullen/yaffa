@@ -1,0 +1,15 @@
+diff a/resources/js/transactions/components/form/TransactionFormInvestment.vue b/resources/js/transactions/components/form/TransactionFormInvestment.vue	(rejected hunks)
+@@ -691,6 +703,13 @@
+           !this.existingPriceForDate
+         );
+       },
++
++      shouldShowCalcPriceButton() {
++        return (
++          ['create', 'clone', 'finalize'].includes(this.action) &&
++          this.transactionTypeSettings.price
++        );
++      },
+     },
+ 
+     created() {

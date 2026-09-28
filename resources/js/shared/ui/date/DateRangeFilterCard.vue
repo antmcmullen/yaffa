@@ -148,9 +148,8 @@
       let dateTo = this.initialDateTo;
 
       if (!dateFrom && !dateTo && preset !== 'none') {
-        const calculator = presetCalculators[preset];
-        if (calculator) {
-          const dates = calculator(new Date());
+        const dates = resolvePresetDates(preset, this.presetGroups);
+        if (dates) {
           dateFrom = formatDate(dates.start);
           dateTo = formatDate(dates.end);
         }
@@ -215,9 +214,8 @@
     },
     methods: {
       onPresetChange() {
-        const calculator = presetCalculators[this.selectedPreset];
-        if (calculator) {
-          const dates = calculator(new Date());
+        const dates = resolvePresetDates(this.selectedPreset, this.presetGroups);
+        if (dates) {
           this.dateFrom = formatDate(dates.start);
           this.dateTo = formatDate(dates.end);
         } else {
