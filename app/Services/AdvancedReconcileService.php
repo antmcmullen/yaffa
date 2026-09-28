@@ -12,6 +12,8 @@ use App\Models\InvestmentPrice;
 use App\Models\TransactionDetailInvestment;
 use App\Models\TransactionDetailStandard;
 use App\Models\User;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -84,7 +86,7 @@ class AdvancedReconcileService
             : Carbon::parse($previousCheckpointDate)->addDay();
 
         $calculatedBalance = $this->calculatedBalanceAt($accountEntity, $checkpoint->checkpoint_date, $checkpointType);
-        $variance = round($checkpoint->balance - $calculatedBalance, 2);
+        $variance = $this->rounded(BigDecimal::of($checkpoint->balance)->minus($calculatedBalance));
 
         return [
             'status' => abs($variance) < 0.01 ? 'matched' : 'reconcile_required',
@@ -101,7 +103,7 @@ class AdvancedReconcileService
         $cashBalance = $this->cashBalanceAt($accountEntity, $date);
 
         if ($checkpointType === CheckpointType::CASH) {
-            return $cashBalance;
+            return $this->rounded($cashBalance);
         }
 
         $investmentBalance = $this->investmentValueAt($accountEntity, $date)['value'];
@@ -110,7 +112,7 @@ class AdvancedReconcileService
             return $investmentBalance;
         }
 
-        return round($cashBalance + $investmentBalance, 2);
+        return $this->rounded($cashBalance->plus($investmentBalance));
     }
 
     /**
@@ -139,15 +141,15 @@ class AdvancedReconcileService
         $openingBalance = $this->cashBalanceBefore($accountEntity, $dateFrom);
         $movements = $this->cashMovements($accountEntity, $dateFrom, $dateTo);
 
-        $totalDeposits = round($movements->filter(fn (float $amount): bool => $amount > 0)->sum(), 2);
-        $totalWithdrawals = round(abs($movements->filter(fn (float $amount): bool => $amount < 0)->sum()), 2);
-        $balance = round($openingBalance + $totalDeposits - $totalWithdrawals, 2);
+        $totalDeposits = $this->sum($movements->filter(fn (BigDecimal $amount): bool => $amount->isPositive()));
+        $totalWithdrawals = $this->sum($movements->filter(fn (BigDecimal $amount): bool => $amount->isNegative()))->abs();
+        $balance = $this->rounded($openingBalance->plus($totalDeposits)->minus($totalWithdrawals));
         $checkpoint = $this->checkpointForDate($accountEntity, $dateTo, CheckpointType::CASH);
 
         return $this->withCheckpointState([
-            'opening_balance' => $openingBalance,
-            'total_withdrawals' => $totalWithdrawals,
-            'total_deposits' => $totalDeposits,
+            'opening_balance' => $this->rounded($openingBalance),
+            'total_withdrawals' => $this->rounded($totalWithdrawals),
+            'total_deposits' => $this->rounded($totalDeposits),
             'balance' => $balance,
         ], $checkpoint, $balance);
     }
@@ -186,24 +188,24 @@ class AdvancedReconcileService
         ], $checkpoint, $balance);
     }
 
-    private function cashBalanceBefore(AccountEntity $accountEntity, Carbon $date): float
+    private function cashBalanceBefore(AccountEntity $accountEntity, Carbon $date): BigDecimal
     {
         return $this->cashBalanceAt($accountEntity, $date->copy()->subDay());
     }
 
-    private function cashBalanceAt(AccountEntity $accountEntity, Carbon $date): float
+    private function cashBalanceAt(AccountEntity $accountEntity, Carbon $date): BigDecimal
     {
         $accountEntity->loadMissing('config');
 
         $openingBalance = $accountEntity->config instanceof Account
-            ? (float) $accountEntity->config->opening_balance
-            : 0.0;
+            ? $accountEntity->config->opening_balance->getAmount()
+            : BigDecimal::zero();
 
-        return round($openingBalance + $this->cashMovements($accountEntity, null, $date)->sum(), 2);
+        return $openingBalance->plus($this->sum($this->cashMovements($accountEntity, null, $date)));
     }
 
     /**
-     * @return Collection<int, float>
+     * @return Collection<int, BigDecimal>
      */
     private function cashMovements(AccountEntity $accountEntity, ?Carbon $dateFrom, Carbon $dateTo): Collection
     {
@@ -211,34 +213,34 @@ class AdvancedReconcileService
             ->join('transactions', 'transaction_details_standard.id', '=', 'transactions.config_id')
             ->where('transactions.config_type', 'standard')
             ->where('transactions.schedule', 0)
-            ->where('transactions.budget', 0)
             ->where('transaction_details_standard.account_from_id', $accountEntity->id)
             ->when($dateFrom, fn ($query) => $query->where('transactions.date', '>=', $dateFrom->toDateString()))
             ->where('transactions.date', '<=', $dateTo->toDateString())
+            ->toBase()
             ->pluck('transaction_details_standard.amount_from')
-            ->map(fn ($amount): float => -1 * (float) $amount);
+            ->map(fn ($amount): BigDecimal => BigDecimal::of($amount)->negated());
 
         $standardTo = TransactionDetailStandard::query()
             ->join('transactions', 'transaction_details_standard.id', '=', 'transactions.config_id')
             ->where('transactions.config_type', 'standard')
             ->where('transactions.schedule', 0)
-            ->where('transactions.budget', 0)
             ->where('transaction_details_standard.account_to_id', $accountEntity->id)
             ->when($dateFrom, fn ($query) => $query->where('transactions.date', '>=', $dateFrom->toDateString()))
             ->where('transactions.date', '<=', $dateTo->toDateString())
+            ->toBase()
             ->pluck('transaction_details_standard.amount_to')
-            ->map(fn ($amount): float => (float) $amount);
+            ->map(fn ($amount): BigDecimal => BigDecimal::of($amount));
 
         $investment = TransactionDetailInvestment::query()
             ->join('transactions', 'transaction_details_investment.id', '=', 'transactions.config_id')
             ->where('transactions.config_type', 'investment')
             ->where('transactions.schedule', 0)
-            ->where('transactions.budget', 0)
             ->where('transaction_details_investment.account_id', $accountEntity->id)
             ->when($dateFrom, fn ($query) => $query->where('transactions.date', '>=', $dateFrom->toDateString()))
             ->where('transactions.date', '<=', $dateTo->toDateString())
+            ->toBase()
             ->pluck('transactions.cashflow_value')
-            ->map(fn ($amount): float => (float) $amount);
+            ->map(fn ($amount): BigDecimal => BigDecimal::of($amount ?? 0));
 
         return $standardFrom->concat($standardTo)->concat($investment)->values();
     }
@@ -252,28 +254,28 @@ class AdvancedReconcileService
         $investments = Investment::whereIn('id', $quantities->pluck('investment_id'))->get()->keyBy('id');
         $missingPriceCount = 0;
 
-        $value = $quantities->sum(function (object $item) use ($date, $investments, &$missingPriceCount): float {
-            $quantity = (float) $item->quantity;
-            if ($quantity === 0.0) {
-                return 0.0;
+        $value = $this->sum($quantities->map(function (object $item) use ($date, $investments, &$missingPriceCount): BigDecimal {
+            $quantity = BigDecimal::of($item->quantity);
+            if ($quantity->isZero()) {
+                return BigDecimal::zero();
             }
 
             $investment = $investments->get($item->investment_id);
             if ($investment === null) {
-                return 0.0;
+                return BigDecimal::zero();
             }
 
-            $price = $this->investmentService->getLatestPrice($investment, 'combined', $date);
+            $price = $this->investmentService->getLatestPriceExact($investment, 'combined', $date);
             if ($price === null) {
                 $missingPriceCount++;
-                $price = 0.0;
+                $price = BigDecimal::zero();
             }
 
-            return $quantity * $price;
-        });
+            return $quantity->multipliedBy($price);
+        }));
 
         return [
-            'value' => round($value, 2),
+            'value' => $this->rounded($value),
             'missing_price_count' => $missingPriceCount,
         ];
     }
@@ -349,7 +351,7 @@ class AdvancedReconcileService
     }
 
     /**
-     * @return Collection<int, TransactionDetailInvestment>
+     * @return Collection<int, object>
      */
     private function quantitiesAt(AccountEntity $accountEntity, Carbon $date): Collection
     {
@@ -364,17 +366,17 @@ class AdvancedReconcileService
             )
             ->join('transactions', 'transaction_details_investment.id', '=', 'transactions.config_id')
             ->where('transactions.schedule', 0)
-            ->where('transactions.budget', 0)
             ->where('transactions.config_type', 'investment')
             ->whereIn('transactions.transaction_type', TransactionTypeEnum::investmentTypesWithQuantityValues())
             ->where('transaction_details_investment.account_id', $accountEntity->id)
             ->where('transactions.date', '<=', $date->toDateString())
             ->groupBy('transaction_details_investment.investment_id')
+            ->toBase()
             ->get();
     }
 
     /**
-     * @return Collection<int, TransactionDetailInvestment>
+     * @return Collection<int, object>
      */
     private function periodInvestmentQuantityChanges(AccountEntity $accountEntity, Carbon $dateFrom, Carbon $dateTo): Collection
     {
@@ -384,12 +386,12 @@ class AdvancedReconcileService
             ->selectRaw("SUM(CASE WHEN transactions.transaction_type IN ('sell', 'remove_shares') THEN IFNULL(transaction_details_investment.quantity, 0) ELSE 0 END) AS sells")
             ->join('transactions', 'transaction_details_investment.id', '=', 'transactions.config_id')
             ->where('transactions.schedule', 0)
-            ->where('transactions.budget', 0)
             ->where('transactions.config_type', 'investment')
             ->whereIn('transactions.transaction_type', TransactionTypeEnum::investmentTypesWithQuantityValues())
             ->where('transaction_details_investment.account_id', $accountEntity->id)
             ->whereBetween('transactions.date', [$dateFrom->toDateString(), $dateTo->toDateString()])
             ->groupBy('transaction_details_investment.investment_id')
+            ->toBase()
             ->get();
     }
 
@@ -409,15 +411,26 @@ class AdvancedReconcileService
      */
     private function withCheckpointState(array $section, ?AccountBalanceCheckpoint $checkpoint, float $calculatedBalance): array
     {
-        $variance = $checkpoint === null ? null : round($checkpoint->balance - $calculatedBalance, 2);
+        $variance = $checkpoint === null ? null : $this->rounded(BigDecimal::of($checkpoint->balance)->minus($calculatedBalance));
 
         return array_merge($section, [
             'checkpoint' => $checkpoint,
-            'checkpoint_value' => $checkpoint?->balance,
+            'checkpoint_value' => $checkpoint === null ? null : (float) $checkpoint->balance,
             'variance' => $variance,
             'status' => $checkpoint === null
                 ? 'no_checkpoint'
                 : (abs($variance) < 0.01 ? 'matched' : 'reconcile_required'),
         ]);
+    }
+
+    /** @param Collection<int, BigDecimal> $amounts */
+    private function sum(Collection $amounts): BigDecimal
+    {
+        return $amounts->reduce(fn (BigDecimal $total, BigDecimal $amount): BigDecimal => $total->plus($amount), BigDecimal::zero());
+    }
+
+    private function rounded(BigDecimal $amount): float
+    {
+        return $amount->toScale(2, RoundingMode::HalfUp)->toFloat();
     }
 }

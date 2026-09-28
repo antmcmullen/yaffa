@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\API;
 
+use App\Enums\TransactionType as TransactionTypeEnum;
+use App\Models\Account;
+
 use App\Models\Transaction;
 use App\Models\TransactionSchedule;
 use App\Models\User;
@@ -322,7 +325,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_from_id' => $entities['account_entity_id'],
                 'account_to_id' => $entities['payee_entity_id'],
@@ -570,7 +572,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->subDays(30)->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'catch_up_schedule' => true,
             'config' => [
                 'account_id' => $accountEntity->id,
@@ -727,7 +728,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_id' => $accountEntity->id,
                 'investment_id' => $investment->id,
@@ -767,7 +767,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_id' => $accountEntity->id,
                 'investment_id' => $investment->id,
@@ -806,7 +805,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_id' => $accountEntity->id,
                 'investment_id' => $investment->id,
@@ -845,7 +843,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_id' => $accountEntity->id,
                 'investment_id' => $investment->id,
@@ -884,7 +881,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_id' => $accountEntity->id,
                 'investment_id' => $investment->id,
@@ -923,7 +919,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_id' => $accountEntity->id,
                 'investment_id' => $investment->id,
@@ -954,7 +949,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_from_id' => $accountEntity->id,
                 'account_to_id' => $payeeEntity->id,
@@ -992,7 +986,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_from_id' => $accountEntity->id,
                 'account_to_id' => $payeeEntity->id,
@@ -1032,7 +1025,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_from_id' => $accountEntity->id,
                 'account_to_id' => $payeeEntity->id,
@@ -1072,7 +1064,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_from_id' => $accountEntity->id,
                 'account_to_id' => $payeeEntity->id,
@@ -1118,7 +1109,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_id' => $accountEntity->id,
                 'investment_id' => $investment->id,
@@ -1158,7 +1148,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_id' => $accountEntity->id,
                 'investment_id' => $investment->id,
@@ -1198,7 +1187,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_id' => $accountEntity->id,
                 'investment_id' => $investment->id,
@@ -1237,7 +1225,6 @@ class TransactionApiControllerTest extends TestCase
             'date' => now()->format('Y-m-d'),
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config' => [
                 'account_id' => $accountEntity->id,
                 'investment_id' => $investment->id,
@@ -1783,7 +1770,6 @@ class TransactionApiControllerTest extends TestCase
             'config_type' => 'standard',
             'reconciled' => false,
             'schedule' => true,
-            'budget' => false,
             'config' => [
                 'account_from_id' => $entities['account_entity_id'],
                 'account_to_id' => $entities['payee_entity_id'],
@@ -2514,7 +2500,6 @@ class TransactionApiControllerTest extends TestCase
             'config_type' => 'standard',
             'reconciled' => false,
             'schedule' => true,
-            'budget' => false,
             'config' => [
                 'account_from_id' => $transaction->config->account_from_id,
                 'account_to_id' => $transaction->config->account_to_id,
@@ -2644,4 +2629,52 @@ class TransactionApiControllerTest extends TestCase
             ],
         ];
     }
+    public function test_can_store_special_investment_transaction_types(): void
+    {
+        Sanctum::actingAs($this->user);
+
+        $currency = Currency::factory()->for($this->user)->create();
+        $account = Account::factory()->withUser($this->user)->create(['currency_id' => $currency->id]);
+        $accountEntity = AccountEntity::factory()->create([
+            'user_id' => $this->user->id,
+            'config_type' => 'account',
+            'config_id' => $account->id,
+            'active' => true,
+        ]);
+        $investment = Investment::factory()->for($this->user)->create(['currency_id' => $currency->id]);
+
+        $cases = [
+            TransactionTypeEnum::PURCHASED_INTEREST->value => [['dividend' => 100], -100],
+            TransactionTypeEnum::PRODUCT_FEE->value => [['commission' => 25], -25],
+            TransactionTypeEnum::TAX_RELIEF->value => [['tax' => 30], 30],
+        ];
+
+        foreach ($cases as $transactionType => [$typeSpecificConfig, $expectedCashFlow]) {
+            $payload = [
+                'action' => 'create',
+                'transaction_type' => $transactionType,
+                'config_type' => 'investment',
+                'date' => now()->format('Y-m-d'),
+                'reconciled' => false,
+                'schedule' => false,
+                'config' => array_merge([
+                    'account_id' => $accountEntity->id,
+                    'investment_id' => $investment->id,
+                ], $typeSpecificConfig),
+            ];
+
+            $response = $this->postJson(route('api.v1.transactions.store-investment'), $payload);
+            $response->assertOk();
+            $response->assertJsonPath('transaction.cashflow_value', number_format($expectedCashFlow, 4, '.', ''));
+
+            $field = array_key_first($typeSpecificConfig);
+            foreach ([null, 0, -1, '1.12345', '10000000000'] as $invalidAmount) {
+                $payload['config'][$field] = $invalidAmount;
+                $this->postJson(route('api.v1.transactions.store-investment'), $payload)
+                    ->assertUnprocessable()
+                    ->assertJsonValidationErrors('config.' . $field);
+            }
+        }
+    }
+
 }

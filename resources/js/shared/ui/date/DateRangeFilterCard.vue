@@ -98,6 +98,29 @@
     return `${y}-${m}-${day}`;
   }
 
+  function findPresetOption(groups, preset) {
+    if (!preset || preset === 'none') {
+      return null;
+    }
+
+    return (groups || [])
+      .flatMap((group) => group.options || [])
+      .find((option) => option.value === preset) || null;
+  }
+
+  function resolvePresetDates(preset, groups) {
+    const option = findPresetOption(groups, preset);
+    if (option?.date_from && option?.date_to) {
+      return {
+        start: new Date(`${option.date_from}T00:00:00`),
+        end: new Date(`${option.date_to}T00:00:00`),
+      };
+    }
+
+    const calculator = presetCalculators[preset];
+    return calculator ? calculator(new Date()) : null;
+  }
+
   export default {
     name: 'DateRangeFilterCard',
     props: {

@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $account_entity_id
  * @property \Illuminate\Support\Carbon $checkpoint_date
  * @property CheckpointType $checkpoint_type
- * @property float $balance
+ * @property string $balance
  * @property string|null $note
  * @property bool $active
  * @property string $source
@@ -47,7 +47,7 @@ class AccountBalanceCheckpoint extends Model
         return [
             'checkpoint_date' => 'date',
             'checkpoint_type' => CheckpointType::class,
-            'balance' => 'float',
+            'balance' => 'decimal:2',
             'active' => 'boolean',
         ];
     }

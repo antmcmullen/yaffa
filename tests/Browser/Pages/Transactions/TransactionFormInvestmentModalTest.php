@@ -256,4 +256,31 @@ class TransactionFormInvestmentModalTest extends DuskTestCase
                 ->waitUntilMissing('#modal-transaction-form-investment', 5);
         });
     }
+    public function test_user_can_calculate_price_from_cashflow_in_modal_create_flow(): void
+    {
+        $this->browse(function (Browser $browser) {
+            $browser->loginAs($this->user)
+                ->visitRoute('account-entity.show', ['account_entity' => $this->accountEntity->id])
+                ->waitForText('Account details')
+                ->click('#create-investment-transaction-button')
+                ->waitForText('Finalize transaction draft')
+                ->waitFor('#transactionFormInvestment')
+                ->waitFor('#investment', 10)
+                ->select2ExactSearch('#investment', 'Test investment USD', 10)
+                ->select('#transaction_type', 'buy')
+                ->type('#transaction_quantity', '10')
+                ->type('#transaction_commission', '30')
+                ->type('#transaction_tax', '40')
+                ->waitFor('#calc_price_button', 10)
+                ->assertVisible('#calc_price_button');
+
+            $browser->script("window.prompt = () => '-270';");
+
+            $browser->click('#calc_price_button');
+
+            $priceValue = (float) $browser->script("return document.querySelector('#transaction_price').value;")[0];
+            $this->assertEquals(20.0, $priceValue);
+        });
+    }
+
 }

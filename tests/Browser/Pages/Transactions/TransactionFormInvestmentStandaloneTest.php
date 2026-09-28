@@ -345,7 +345,7 @@ class TransactionFormInvestmentStandaloneTest extends DuskTestCase
                 ->type('#transaction_tax', '40')
                 ->waitFor('#calc_price_button', 10);
 
-            $browser->script("window.prompt = () => '270';");
+            $browser->script("window.prompt = () => '-270';");
 
             $browser->click('#calc_price_button');
 
@@ -419,7 +419,7 @@ class TransactionFormInvestmentStandaloneTest extends DuskTestCase
                 ->waitFor('#calc_price_button', 10)
                 ->assertVisible('#calc_price_button');
 
-            $browser->script("window.prompt = () => '300';");
+            $browser->script("window.prompt = () => '-300';");
 
             $browser->click('#calc_price_button');
 

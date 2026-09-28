@@ -15,7 +15,7 @@ class AccountBalanceCheckpointRequest extends FormRequest
         return [
             'checkpoint_date' => ['required', 'date'],
             'checkpoint_type' => ['required', Rule::in(CheckpointType::values())],
-            'balance' => ['required', 'numeric', 'min:-9999999999999.99', 'max:9999999999999.99'],
+            'balance' => ['required', 'numeric', 'decimal:0,2', 'min:-9999999999999.99', 'max:9999999999999.99'],
             'note' => ['nullable', 'string'],
             'source' => ['nullable', 'string', 'max:191'],
             'source_document_id' => ['nullable', 'string', 'max:191'],

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Casts\MoneyCast;
 use App\Models\Account;
+use App\Models\AccountBalanceCheckpoint;
 use App\Models\AccountEntity;
 use App\Models\AccountGroup;
 use App\Models\Currency;

@@ -4,6 +4,7 @@ import 'datatables-contextual-actions';
 
 import * as dataTableHelpers from '@/shared/lib/datatable';
 import * as helpers from '@/shared/lib/helpers';
+import { escapeHtml, jsonFromResponse } from '@/shared/lib/helpers';
 import {
   getDataTablesLanguageOptions,
   toFormattedCurrency,
@@ -19,6 +20,32 @@ const selectorLeftControlPanel = '#accountLeftControlPanel';
 const selectorMainContent = '#accountMainContent';
 const selectorLeftControlPanelToggleButton =
   '#toggleAccountLeftControlPanelButton';
+
+const reconcileSectionLabels = {
+    cash: {
+        opening_balance: __('Opening balance'),
+        total_withdrawals: __('Total withdrawals'),
+        total_deposits: __('Total deposits'),
+        balance: __('Balance'),
+        checkpoint_value: __('Checkpoint value'),
+        variance: __('Variance / Match'),
+    },
+    investment: {
+        opening_value: __('Opening investment value'),
+        closing_value: __('Closing investment value'),
+        checkpoint_value: __('Checkpoint value'),
+        variance: __('Variance / Match'),
+    },
+    total: {
+        balance: __('Balance'),
+        checkpoint_value: __('Checkpoint value'),
+        variance: __('Variance / Match'),
+    },
+};
+
+let advancedReconcileData = null;
+let advancedReconcilePriceModal = null;
+let advancedReconcilePriceContext = null;
 
 let currentDateFilters = {
   dateFrom: window.filters?.date_from || null,
@@ -710,6 +737,7 @@ const dateRangeApp = createApp({
       initialDateFrom: currentDateFilters.dateFrom,
       initialDateTo: currentDateFilters.dateTo,
       initialPreset: currentDateFilters.preset,
+      presetGroups: accountDatePresetGroups(),
     };
   },
   mounted() {

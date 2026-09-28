@@ -528,7 +528,7 @@
 
 <script>
   import { RRule } from 'rrule';
-  import Decimal from 'decimal.js';
+  import { investmentCashflow, priceFromCashflow } from '@/investments/lib/investmentCashflow';
   import MathInput from '@/shared/ui/form/MathInput.vue';
   import { confirmAction } from '@/shared/lib/confirm';
 
@@ -686,19 +686,7 @@
       // from the API as decimal strings (MoneyCast), which native `+` would silently
       // string-concatenate instead of add.
       total() {
-        const quantity = new Decimal(this.form.config.quantity || 0);
-        const price = new Decimal(this.form.config.price || 0);
-        const dividend = new Decimal(this.form.config.dividend || 0);
-        const commission = new Decimal(this.form.config.commission || 0);
-        const tax = new Decimal(this.form.config.tax || 0);
-
-        return quantity
-          .times(price)
-            .times(this.transactionTypeSettings.amount_multiplier || 0)
-            .plus(dividend.times(this.transactionTypeSettings.dividend_multiplier ?? 1))
-            .plus(commission.times(this.transactionTypeSettings.commission_multiplier ?? -1))
-            .plus(tax.times(this.transactionTypeSettings.tax_multiplier ?? -1))
-          .toNumber();
+        return investmentCashflow(this.form.config, this.transactionTypeSettings).toNumber();
       },
 
       transactionTypeSettings() {
@@ -1471,83 +1459,26 @@
         }, 500);
       },
 
-      toNumericValue(value) {
-        const numericValue = Number(value);
-
-        return Number.isFinite(numericValue) ? numericValue : 0;
-      },
-
       calculatePriceFromCashflow() {
-        const quantity = this.toNumericValue(this.form.config.quantity);
-
-        if (quantity === 0) {
-          toastHelpers.showWarningToast(
-            __('Enter quantity first to calculate the price'),
-          );
+        if (!this.form.config.quantity || Number(this.form.config.quantity) <= 0) {
+          toastHelpers.showWarningToast(__('Enter quantity first to calculate the price'));
           return;
         }
 
-        const cashflowPromptValue = window.prompt(
-          __('Enter total cashflow value'),
-        );
-
-        if (cashflowPromptValue === null) {
-          return;
-        }
-
-        const normalizedCashflowValue = String(cashflowPromptValue).trim();
-
-        if (normalizedCashflowValue === '') {
+        const cashflow = window.prompt(__('Enter total cashflow value (negative for purchases)'));
+        if (cashflow === null) return;
+        if (cashflow.trim() === '' || !Number.isFinite(Number(cashflow))) {
           toastHelpers.showWarningToast(__('Please enter a valid cashflow value'));
           return;
         }
 
-        const cashflow = Number(normalizedCashflowValue);
-
-        if (!Number.isFinite(cashflow)) {
-          toastHelpers.showWarningToast(__('Please enter a valid cashflow value'));
-          return;
+        try {
+          this.form.config.price = priceFromCashflow(this.form.config, this.transactionTypeSettings, cashflow.trim());
+          this.onPriceChange();
+        } catch (error) {
+          toastHelpers.showWarningToast(__(error.message));
         }
-
-        const commission = this.toNumericValue(this.form.config.commission);
-        const tax = this.toNumericValue(this.form.config.tax);
-        const amountMultiplier = this.toNumericValue(
-          this.transactionTypeSettings.amount_multiplier,
-        );
-        const commissionMultiplier = this.toNumericValue(
-          this.transactionTypeSettings.commission_multiplier,
-        );
-        const taxMultiplier = this.toNumericValue(
-          this.transactionTypeSettings.tax_multiplier,
-        );
-
-        if (amountMultiplier === 0) {
-          toastHelpers.showWarningToast(
-            __('Price cannot be calculated for this transaction type'),
-          );
-          return;
-        }
-
-        // Inverse of total formula:
-        // cashflow = qty*price*amountMultiplier + commission*commissionMultiplier + tax*taxMultiplier
-        const numerator =
-          cashflow -
-          commission * commissionMultiplier -
-          tax * taxMultiplier;
-        const denominator = quantity * amountMultiplier;
-        const calculatedPrice = numerator / denominator;
-
-        if (!Number.isFinite(calculatedPrice) || calculatedPrice <= 0) {
-          toastHelpers.showWarningToast(
-            __('Calculated price must be greater than zero'),
-          );
-          return;
-        }
-
-        this.form.config.price = Number(calculatedPrice.toFixed(10));
-        this.onPriceChange();
       },
-
       async storePriceIfEnabled(transaction) {
         if (!this.storePriceEnabled || !transaction.config.price) {
           return;
