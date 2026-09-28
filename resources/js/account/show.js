@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import 'datatables.net-bs5';
 import 'datatables.net-select-bs5';
 import 'datatables-contextual-actions';
@@ -809,7 +810,7 @@ function renderAdvancedReconcileHoldings(holdings) {
     }
 
     if (!holdings.length) {
-        body.innerHTML = '<tr><td colspan="7" class="text-muted">' + __('No investment holdings in this period') + '</td></tr>';
+        body.innerHTML = '<tr><td colspan="9" class="text-muted">' + __('No investment holdings in this period') + '</td></tr>';
         return;
     }
 
@@ -869,7 +870,7 @@ function loadAdvancedReconcile() {
         params.append('date_to', currentDateFilters.dateTo);
     }
 
-    fetch('/api/v1/accounts/' + window.account.id + '/advanced-reconcile?' + params, {
+    fetch(window.route('api.v1.accounts.advanced-reconcile.show', { accountEntity: window.account.id }) + '?' + params, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
             'X-CSRF-TOKEN': window.csrfToken,
@@ -896,7 +897,7 @@ document.querySelectorAll('[data-checkpoint-type]').forEach((button) => {
 
         const note = prompt(__('Checkpoint note'), '');
 
-        axios.post('/api/v1/accounts/' + window.account.id + '/balance-checkpoints', {
+        axios.post(window.route('api.v1.accounts.balance-checkpoints.store', { accountEntity: window.account.id }), {
             checkpoint_date: advancedReconcileData.date_to,
             checkpoint_type: type,
             balance: checkpointValue,
@@ -925,7 +926,7 @@ function ensureAdvancedReconcilePriceModal() {
         document.body.insertAdjacentHTML('beforeend', `
             <div class="modal fade" id="advancedReconcilePriceModal" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog">
-                    <form class="modal-content" id="advancedReconcilePriceForm">
+                    <form class="modal-content" id="advancedReconcilePriceForm" novalidate>
                         <div class="modal-header">
                             <h5 class="modal-title">${__('Set investment price')}</h5>
                             <button type="button" class="btn-close" data-coreui-dismiss="modal" data-bs-dismiss="modal" aria-label="${__('Close')}"></button>
@@ -987,7 +988,7 @@ function ensureAdvancedReconcilePriceModal() {
 function openAdvancedReconcilePriceModal(button) {
     const element = ensureAdvancedReconcilePriceModal();
     const quantity = Number(button.dataset.priceQuantity || 0);
-    const currentPrice = button.dataset.priceCurrent ? Number(button.dataset.priceCurrent) : null;
+    const currentPrice = button.dataset.priceCurrent || null;
     const currentValue = button.dataset.priceCurrentValue ? Number(button.dataset.priceCurrentValue) : null;
 
     advancedReconcilePriceContext = {
@@ -1023,8 +1024,8 @@ function saveAdvancedReconcilePrice(event) {
     const modalElement = document.getElementById('advancedReconcilePriceModal');
     const errorElement = modalElement.querySelector('#advancedReconcilePriceError');
     const useValue = modalElement.querySelector('#advancedReconcileValuePanel').classList.contains('active');
-    const rawPrice = Number(modalElement.querySelector('#advancedReconcilePriceInput').value);
-    const rawValue = Number(modalElement.querySelector('#advancedReconcileValueInput').value);
+    const rawPrice = modalElement.querySelector('#advancedReconcilePriceInput').value;
+    const rawValue = modalElement.querySelector('#advancedReconcileValueInput').value;
     let price = rawPrice;
 
     errorElement.classList.add('d-none');
@@ -1036,10 +1037,10 @@ function saveAdvancedReconcilePrice(event) {
             return;
         }
 
-        price = rawValue / advancedReconcilePriceContext.quantity;
+        price = new Decimal(rawValue || 0).div(advancedReconcilePriceContext.quantity).toFixed(10);
     }
 
-    if (!Number.isFinite(price) || price <= 0) {
+    if (!Number.isFinite(Number(price)) || Number(price) <= 0) {
         errorElement.textContent = __('Enter a price greater than zero.');
         errorElement.classList.remove('d-none');
         return;
@@ -1048,15 +1049,15 @@ function saveAdvancedReconcilePrice(event) {
     const payload = {
         investment_id: advancedReconcilePriceContext.investmentId,
         date: advancedReconcilePriceContext.date,
-        price: Number(price.toFixed(10)),
+        price: new Decimal(price).toFixed(10),
     };
 
     const request = advancedReconcilePriceContext.storedPriceId
-        ? axios.put('/api/v1/investment-prices/' + advancedReconcilePriceContext.storedPriceId, {
+        ? axios.put(window.route('api.v1.investment-prices.update', { investment_price: advancedReconcilePriceContext.storedPriceId }), {
             ...payload,
             id: advancedReconcilePriceContext.storedPriceId,
         })
-        : axios.post('/api/v1/investment-prices', payload);
+        : axios.post(window.route('api.v1.investment-prices.store'), payload);
 
     request.then(() => {
         toastHelpers.showSuccessToast(__('Investment price saved'));

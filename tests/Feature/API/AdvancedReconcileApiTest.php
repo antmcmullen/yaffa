@@ -246,6 +246,64 @@ class AdvancedReconcileApiTest extends TestCase
         ]));
     }
 
+    public function test_special_investment_cashflows_and_schedules_are_reconciled_correctly(): void
+    {
+        Sanctum::actingAs($this->user);
+        $investment = Investment::factory()->withUser($this->user)->create([
+            'currency_id' => $this->account->config->currency_id,
+        ]);
+
+        foreach ([
+            [TransactionType::PURCHASED_INTEREST, ['dividend' => '20.1250'], false],
+            [TransactionType::TAX_RELIEF, ['tax' => '10.2500'], false],
+            [TransactionType::PRODUCT_FEE, ['commission' => '1.1250'], false],
+            [TransactionType::TAX_RELIEF, ['tax' => '999.0000'], true],
+        ] as [$type, $amounts, $scheduled]) {
+            $detail = TransactionDetailInvestment::factory()->create(array_merge([
+                'account_id' => $this->account->id,
+                'investment_id' => $investment->id,
+                'quantity' => null,
+                'price' => null,
+                'dividend' => null,
+                'commission' => null,
+                'tax' => null,
+            ], $amounts));
+            $transaction = Transaction::factory()->create([
+                'user_id' => $this->user->id,
+                'config_type' => 'investment',
+                'config_id' => $detail->id,
+                'transaction_type' => $type,
+                'date' => '2026-07-15',
+                'schedule' => $scheduled,
+            ]);
+            $transaction->cashflow_value = app(\App\Services\TransactionService::class)->getTransactionCashFlow($transaction);
+            $transaction->save();
+        }
+
+        $this->getJulySummary()->assertOk()
+            ->assertJsonPath('cash.opening_balance', 100)
+            ->assertJsonPath('cash.total_deposits', 10.25)
+            ->assertJsonPath('cash.total_withdrawals', 21.25)
+            ->assertJsonPath('cash.balance', 89)
+            ->assertJsonPath('total.balance', 89);
+    }
+
+    public function test_user_cannot_read_another_users_reconciliation(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+        $this->getJulySummary()->assertForbidden();
+    }
+
+    public function test_checkpoint_rejects_excess_precision(): void
+    {
+        Sanctum::actingAs($this->user);
+        $this->postJson(route('api.v1.accounts.balance-checkpoints.store', ['accountEntity' => $this->account]), [
+            'checkpoint_date' => '2026-07-31',
+            'checkpoint_type' => 'cash',
+            'balance' => '100.001',
+        ])->assertUnprocessable()->assertJsonValidationErrors('balance');
+    }
+
     private function createJulyCashMovements(): void
     {
         $this->createWithdrawal('2026-07-03', 30);
@@ -266,7 +324,6 @@ class AdvancedReconcileApiTest extends TestCase
             'transaction_type' => TransactionType::WITHDRAWAL,
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config_type' => 'standard',
             'config_id' => $detail->id,
             'user_id' => $this->user->id,
@@ -287,7 +344,6 @@ class AdvancedReconcileApiTest extends TestCase
             'transaction_type' => TransactionType::DEPOSIT,
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config_type' => 'standard',
             'config_id' => $detail->id,
             'user_id' => $this->user->id,
@@ -311,7 +367,6 @@ class AdvancedReconcileApiTest extends TestCase
             'transaction_type' => TransactionType::BUY,
             'reconciled' => false,
             'schedule' => false,
-            'budget' => false,
             'config_type' => 'investment',
             'config_id' => $detail->id,
             'cashflow_value' => -100,
