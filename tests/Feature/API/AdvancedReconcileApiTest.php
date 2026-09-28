@@ -319,7 +319,7 @@ class AdvancedReconcileApiTest extends TestCase
             'amount_to' => $amount,
         ]);
 
-        Transaction::create([
+        Transaction::factory()->create([
             'date' => $date,
             'transaction_type' => TransactionType::WITHDRAWAL,
             'reconciled' => false,
@@ -339,7 +339,7 @@ class AdvancedReconcileApiTest extends TestCase
             'amount_to' => $amount,
         ]);
 
-        Transaction::create([
+        Transaction::factory()->create([
             'date' => $date,
             'transaction_type' => TransactionType::DEPOSIT,
             'reconciled' => false,
@@ -362,7 +362,7 @@ class AdvancedReconcileApiTest extends TestCase
             'dividend' => null,
         ]);
 
-        Transaction::create([
+        Transaction::factory()->create([
             'date' => $date,
             'transaction_type' => TransactionType::BUY,
             'reconciled' => false,

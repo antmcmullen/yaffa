@@ -1053,7 +1053,7 @@ function saveAdvancedReconcilePrice(event) {
     };
 
     const request = advancedReconcilePriceContext.storedPriceId
-        ? axios.put(window.route('api.v1.investment-prices.update', { investment_price: advancedReconcilePriceContext.storedPriceId }), {
+        ? axios.put(window.route('api.v1.investment-prices.update', { investmentPrice: advancedReconcilePriceContext.storedPriceId }), {
             ...payload,
             id: advancedReconcilePriceContext.storedPriceId,
         })
