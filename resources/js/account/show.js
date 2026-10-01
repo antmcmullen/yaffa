@@ -23,25 +23,25 @@ const selectorLeftControlPanelToggleButton =
   '#toggleAccountLeftControlPanelButton';
 
 const reconcileSectionLabels = {
-    cash: {
-        opening_balance: __('Opening balance'),
-        total_withdrawals: __('Total withdrawals'),
-        total_deposits: __('Total deposits'),
-        balance: __('Balance'),
-        checkpoint_value: __('Checkpoint value'),
-        variance: __('Variance / Match'),
-    },
-    investment: {
-        opening_value: __('Opening investment value'),
-        closing_value: __('Closing investment value'),
-        checkpoint_value: __('Checkpoint value'),
-        variance: __('Variance / Match'),
-    },
-    total: {
-        balance: __('Balance'),
-        checkpoint_value: __('Checkpoint value'),
-        variance: __('Variance / Match'),
-    },
+  cash: {
+    opening_balance: __('Opening balance'),
+    total_withdrawals: __('Total withdrawals'),
+    total_deposits: __('Total deposits'),
+    balance: __('Balance'),
+    checkpoint_value: __('Checkpoint value'),
+    variance: __('Variance / Match'),
+  },
+  investment: {
+    opening_value: __('Opening investment value'),
+    closing_value: __('Closing investment value'),
+    checkpoint_value: __('Checkpoint value'),
+    variance: __('Variance / Match'),
+  },
+  total: {
+    balance: __('Balance'),
+    checkpoint_value: __('Checkpoint value'),
+    variance: __('Variance / Match'),
+  },
 };
 
 let advancedReconcileData = null;
@@ -60,25 +60,25 @@ const hasInitialFilters =
   (!!currentDateFilters.preset && currentDateFilters.preset !== 'none');
 
 function accountDatePresetGroups() {
-    const presetGroups = window.YAFFA?.config?.datePresets || [];
-    const checkpointWindows = window.checkpointWindows || [];
+  const presetGroups = window.YAFFA?.config?.datePresets || [];
+  const checkpointWindows = window.checkpointWindows || [];
 
-    if (!checkpointWindows.length) {
-        return presetGroups;
-    }
+  if (!checkpointWindows.length) {
+    return presetGroups;
+  }
 
-    return [
-        ...presetGroups,
-        {
-            label: 'Checkpoint windows',
-            options: checkpointWindows.map((windowOption) => ({
-                value: windowOption.value,
-                label: windowOption.label,
-                date_from: windowOption.date_from,
-                date_to: windowOption.date_to,
-            })),
-        },
-    ];
+  return [
+    ...presetGroups,
+    {
+      label: 'Checkpoint windows',
+      options: checkpointWindows.map((windowOption) => ({
+        value: windowOption.value,
+        label: windowOption.label,
+        date_from: windowOption.date_from,
+        date_to: windowOption.date_to,
+      })),
+    },
+  ];
 }
 
 /**
@@ -725,7 +725,7 @@ const handleDateRangeUpdated = ({ dateFrom, dateTo, preset }) => {
     preset: preset || null,
   };
 
-    loadAdvancedReconcile();
+  loadAdvancedReconcile();
   reloadTable();
 };
 
@@ -757,173 +757,276 @@ installRouteGlobal(dateRangeApp);
 dateRangeApp.mount('#account-date-range-filter');
 
 function formatAccountCurrency(value) {
-    return toFormattedCurrency(
-        value || 0,
-        window.YAFFA.userSettings.locale,
-        window.account.config.currency
-    );
+  return toFormattedCurrency(
+    value || 0,
+    window.YAFFA.userSettings.locale,
+    window.account.config.currency,
+  );
 }
 
 function renderCheckpointValue(section) {
-    if (!section.checkpoint) {
-        return '<span class="text-muted">' + __('No checkpoint') + '</span>';
-    }
+  if (!section.checkpoint) {
+    return '<span class="text-muted">' + __('No checkpoint') + '</span>';
+  }
 
-    const note = section.checkpoint.note ? ' title="' + escapeHtml(section.checkpoint.note) + '"' : '';
-    return '<span' + note + '>' + formatAccountCurrency(section.checkpoint.balance) + '</span>';
+  const note = section.checkpoint.note
+    ? ' title="' + escapeHtml(section.checkpoint.note) + '"'
+    : '';
+  return (
+    '<span' +
+    note +
+    '>' +
+    formatAccountCurrency(section.checkpoint.balance) +
+    '</span>'
+  );
 }
 
 function renderVariance(section) {
-    if (section.status === 'no_checkpoint') {
-        return '<span class="text-muted">' + __('No checkpoint') + '</span>';
-    }
+  if (section.status === 'no_checkpoint') {
+    return '<span class="text-muted">' + __('No checkpoint') + '</span>';
+  }
 
-    if (section.status === 'matched') {
-        return '<span class="text-success"><i class="fa-solid fa-check"></i> ' + __('Matched') + '</span>';
-    }
+  if (section.status === 'matched') {
+    return (
+      '<span class="text-success"><i class="fa-solid fa-check"></i> ' +
+      __('Matched') +
+      '</span>'
+    );
+  }
 
-    return '<span class="text-warning"><i class="fa-solid fa-triangle-exclamation"></i> ' +
-        formatAccountCurrency(section.variance) +
-        '</span>';
+  return (
+    '<span class="text-warning"><i class="fa-solid fa-triangle-exclamation"></i> ' +
+    formatAccountCurrency(section.variance) +
+    '</span>'
+  );
 }
 
 function renderAdvancedReconcileSection(type, data) {
-    const element = document.querySelector('[data-reconcile-section="' + type + '"]');
-    if (!element) {
-        return;
-    }
+  const element = document.querySelector(
+    '[data-reconcile-section="' + type + '"]',
+  );
+  if (!element) {
+    return;
+  }
 
-    const labels = reconcileSectionLabels[type];
-    element.innerHTML = Object.keys(labels).map((key) => {
-        const value = key === 'checkpoint_value'
-            ? renderCheckpointValue(data)
-            : (key === 'variance' ? renderVariance(data) : formatAccountCurrency(data[key]));
+  const labels = reconcileSectionLabels[type];
+  element.innerHTML = Object.keys(labels)
+    .map((key) => {
+      const value =
+        key === 'checkpoint_value'
+          ? renderCheckpointValue(data)
+          : key === 'variance'
+            ? renderVariance(data)
+            : formatAccountCurrency(data[key]);
 
-        return '<dt class="col-7">' + labels[key] + '</dt><dd class="col-5 text-end">' + value + '</dd>';
-    }).join('');
+      return (
+        '<dt class="col-7">' +
+        labels[key] +
+        '</dt><dd class="col-5 text-end">' +
+        value +
+        '</dd>'
+      );
+    })
+    .join('');
 }
 
 function renderAdvancedReconcileHoldings(holdings) {
-    const body = document.getElementById('advancedReconcileHoldingsBody');
-    if (!body) {
-        return;
-    }
+  const body = document.getElementById('advancedReconcileHoldingsBody');
+  if (!body) {
+    return;
+  }
 
-    if (!holdings.length) {
-        body.innerHTML = '<tr><td colspan="9" class="text-muted">' + __('No investment holdings in this period') + '</td></tr>';
-        return;
-    }
+  if (!holdings.length) {
+    body.innerHTML =
+      '<tr><td colspan="9" class="text-muted">' +
+      __('No investment holdings in this period') +
+      '</td></tr>';
+    return;
+  }
 
-    body.innerHTML = holdings.map((holding) => {
-        return '<tr class="' + (holding.has_missing_price ? 'table-warning' : '') + '">' +
-            '<td>' + escapeHtml(holding.name) + '</td>' +
-            '<td class="text-end">' + holding.open_quantity + '</td>' +
-            '<td class="text-end">' + holding.close_quantity + '</td>' +
-            '<td class="text-end">' + holding.buys + '</td>' +
-            '<td class="text-end">' + holding.sells + '</td>' +
-            '<td class="text-end">' + renderHoldingPriceButton(holding, 'open') + '</td>' +
-            '<td class="text-end">' + renderHoldingPriceButton(holding, 'close') + '</td>' +
-             '<td class="text-end">' + formatAccountCurrency(holding.open_value)  + '</td>' +
-            '<td class="text-end">' + formatAccountCurrency(holding.close_value) + '</td>' +
-            '</tr>';
-    }).join('');
+  body.innerHTML = holdings
+    .map((holding) => {
+      return (
+        '<tr class="' +
+        (holding.has_missing_price ? 'table-warning' : '') +
+        '">' +
+        '<td>' +
+        escapeHtml(holding.name) +
+        '</td>' +
+        '<td class="text-end">' +
+        holding.open_quantity +
+        '</td>' +
+        '<td class="text-end">' +
+        holding.close_quantity +
+        '</td>' +
+        '<td class="text-end">' +
+        holding.buys +
+        '</td>' +
+        '<td class="text-end">' +
+        holding.sells +
+        '</td>' +
+        '<td class="text-end">' +
+        renderHoldingPriceButton(holding, 'open') +
+        '</td>' +
+        '<td class="text-end">' +
+        renderHoldingPriceButton(holding, 'close') +
+        '</td>' +
+        '<td class="text-end">' +
+        formatAccountCurrency(holding.open_value) +
+        '</td>' +
+        '<td class="text-end">' +
+        formatAccountCurrency(holding.close_value) +
+        '</td>' +
+        '</tr>'
+      );
+    })
+    .join('');
 }
 
 function renderHoldingPriceButton(holding, side) {
-    const quantity = side === 'open' ? holding.open_quantity : holding.close_quantity;
-    const price = side === 'open' ? holding.open_price : holding.close_price;
-    const value = side === 'open' ? holding.open_value : holding.close_value;
-    const date = side === 'open' ? holding.open_price_date : holding.close_price_date;
-    const storedPriceId = side === 'open' ? holding.open_stored_price_id : holding.close_stored_price_id;
-    const isMissing = quantity !== 0 && price === null;
-    const label = isMissing ? __('Missing') : formatAccountCurrency(price);
-    const className = isMissing ? 'btn btn-xs btn-outline-warning' : 'btn btn-xs btn-link p-0 text-decoration-none';
+  const quantity =
+    side === 'open' ? holding.open_quantity : holding.close_quantity;
+  const price = side === 'open' ? holding.open_price : holding.close_price;
+  const value = side === 'open' ? holding.open_value : holding.close_value;
+  const date =
+    side === 'open' ? holding.open_price_date : holding.close_price_date;
+  const storedPriceId =
+    side === 'open'
+      ? holding.open_stored_price_id
+      : holding.close_stored_price_id;
+  const isMissing = quantity !== 0 && price === null;
+  const label = isMissing ? __('Missing') : formatAccountCurrency(price);
+  const className = isMissing
+    ? 'btn btn-xs btn-outline-warning'
+    : 'btn btn-xs btn-link p-0 text-decoration-none';
 
-    return '<button type="button" class="' + className + '" ' +
-        'data-price-investment="' + holding.investment_id + '" ' +
-        'data-price-date="' + date + '" ' +
-        'data-price-side="' + side + '" ' +
-        'data-price-quantity="' + quantity + '" ' +
-        'data-price-current="' + (price ?? '') + '" ' +
-        'data-price-current-value="' + (value ?? '') + '" ' +
-        'data-price-stored-id="' + (storedPriceId ?? '') + '" ' +
-        'data-price-investment-name="' + escapeHtml(holding.name) + '">' +
-        label +
-        '</button>';
+  return (
+    '<button type="button" class="' +
+    className +
+    '" ' +
+    'data-price-investment="' +
+    holding.investment_id +
+    '" ' +
+    'data-price-date="' +
+    date +
+    '" ' +
+    'data-price-side="' +
+    side +
+    '" ' +
+    'data-price-quantity="' +
+    quantity +
+    '" ' +
+    'data-price-current="' +
+    (price ?? '') +
+    '" ' +
+    'data-price-current-value="' +
+    (value ?? '') +
+    '" ' +
+    'data-price-stored-id="' +
+    (storedPriceId ?? '') +
+    '" ' +
+    'data-price-investment-name="' +
+    escapeHtml(holding.name) +
+    '">' +
+    label +
+    '</button>'
+  );
 }
 
 function renderAdvancedReconcile(data) {
-    advancedReconcileData = data;
-    renderAdvancedReconcileSection('cash', data.cash);
-    renderAdvancedReconcileSection('investment', data.investment);
-    renderAdvancedReconcileSection('total', data.total);
-    renderAdvancedReconcileHoldings(data.investment.holdings || []);
-    helpers.initializeBootstrapTooltips();
+  advancedReconcileData = data;
+  renderAdvancedReconcileSection('cash', data.cash);
+  renderAdvancedReconcileSection('investment', data.investment);
+  renderAdvancedReconcileSection('total', data.total);
+  renderAdvancedReconcileHoldings(data.investment.holdings || []);
+  helpers.initializeBootstrapTooltips();
 }
 
 function loadAdvancedReconcile() {
-    const params = new URLSearchParams();
-    if (currentDateFilters.dateFrom) {
-        params.append('date_from', currentDateFilters.dateFrom);
-    }
-    if (currentDateFilters.dateTo) {
-        params.append('date_to', currentDateFilters.dateTo);
-    }
+  const params = new URLSearchParams();
+  if (currentDateFilters.dateFrom) {
+    params.append('date_from', currentDateFilters.dateFrom);
+  }
+  if (currentDateFilters.dateTo) {
+    params.append('date_to', currentDateFilters.dateTo);
+  }
 
-    fetch(window.route('api.v1.accounts.advanced-reconcile.show', { accountEntity: window.account.id }) + '?' + params, {
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': window.csrfToken,
-        },
-    })
-        .then(jsonFromResponse)
-        .then(renderAdvancedReconcile)
-        .catch(error => toastHelpers.showErrorToast(error.message));
+  fetch(
+    window.route('api.v1.accounts.advanced-reconcile.show', {
+      accountEntity: window.account.id,
+    }) +
+      '?' +
+      params,
+    {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': window.csrfToken,
+      },
+    },
+  )
+    .then(jsonFromResponse)
+    .then(renderAdvancedReconcile)
+    .catch((error) => toastHelpers.showErrorToast(error.message));
 }
 
 document.querySelectorAll('[data-checkpoint-type]').forEach((button) => {
-    button.addEventListener('click', () => {
-        if (!advancedReconcileData) {
-            return;
-        }
+  button.addEventListener('click', () => {
+    if (!advancedReconcileData) {
+      return;
+    }
 
-        const type = button.dataset.checkpointType;
-        const section = advancedReconcileData[type];
-        const balance = type === 'investment' ? section.closing_value : section.balance;
-        const checkpointValue = prompt(__('Checkpoint value'), balance);
-        if (checkpointValue === null) {
-            return;
-        }
+    const type = button.dataset.checkpointType;
+    const section = advancedReconcileData[type];
+    const balance =
+      type === 'investment' ? section.closing_value : section.balance;
+    const checkpointValue = prompt(__('Checkpoint value'), balance);
+    if (checkpointValue === null) {
+      return;
+    }
 
-        const note = prompt(__('Checkpoint note'), '');
+    const note = prompt(__('Checkpoint note'), '');
 
-        axios.post(window.route('api.v1.accounts.balance-checkpoints.store', { accountEntity: window.account.id }), {
-            checkpoint_date: advancedReconcileData.date_to,
-            checkpoint_type: type,
-            balance: checkpointValue,
-            note: note,
-        }).then(() => {
-            toastHelpers.showSuccessToast(__('Checkpoint saved'));
-            loadAdvancedReconcile();
-        }).catch((error) => {
-            toastHelpers.showErrorToast(error.response?.data?.message || error.message);
-        });
-    });
+    axios
+      .post(
+        window.route('api.v1.accounts.balance-checkpoints.store', {
+          accountEntity: window.account.id,
+        }),
+        {
+          checkpoint_date: advancedReconcileData.date_to,
+          checkpoint_type: type,
+          balance: checkpointValue,
+          note: note,
+        },
+      )
+      .then(() => {
+        toastHelpers.showSuccessToast(__('Checkpoint saved'));
+        loadAdvancedReconcile();
+      })
+      .catch((error) => {
+        toastHelpers.showErrorToast(
+          error.response?.data?.message || error.message,
+        );
+      });
+  });
 });
 
-document.getElementById('advancedReconcileHoldingsBody')?.addEventListener('click', (event) => {
+document
+  .getElementById('advancedReconcileHoldingsBody')
+  ?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-price-investment]');
     if (!button) {
-        return;
+      return;
     }
 
     openAdvancedReconcilePriceModal(button);
-});
+  });
 
 function ensureAdvancedReconcilePriceModal() {
-    let element = document.getElementById('advancedReconcilePriceModal');
-    if (!element) {
-        document.body.insertAdjacentHTML('beforeend', `
+  let element = document.getElementById('advancedReconcilePriceModal');
+  if (!element) {
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      `
             <div class="modal fade" id="advancedReconcilePriceModal" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog">
                     <form class="modal-content" id="advancedReconcilePriceForm" novalidate>
@@ -968,104 +1071,137 @@ function ensureAdvancedReconcilePriceModal() {
                     </form>
                 </div>
             </div>
-        `);
+        `,
+    );
 
-        element = document.getElementById('advancedReconcilePriceModal');
-        document.getElementById('advancedReconcilePriceForm').addEventListener('submit', saveAdvancedReconcilePrice);
+    element = document.getElementById('advancedReconcilePriceModal');
+    document
+      .getElementById('advancedReconcilePriceForm')
+      .addEventListener('submit', saveAdvancedReconcilePrice);
+  }
+
+  if (!advancedReconcilePriceModal) {
+    if (window.coreui && window.coreui.Modal) {
+      advancedReconcilePriceModal = new window.coreui.Modal(element);
+    } else {
+      advancedReconcilePriceModal = new window.bootstrap.Modal(element);
     }
+  }
 
-    if (!advancedReconcilePriceModal) {
-        if (window.coreui && window.coreui.Modal) {
-            advancedReconcilePriceModal = new window.coreui.Modal(element);
-        } else {
-            advancedReconcilePriceModal = new window.bootstrap.Modal(element);
-        }
-    }
-
-    return element;
+  return element;
 }
 
 function openAdvancedReconcilePriceModal(button) {
-    const element = ensureAdvancedReconcilePriceModal();
-    const quantity = Number(button.dataset.priceQuantity || 0);
-    const currentPrice = button.dataset.priceCurrent || null;
-    const currentValue = button.dataset.priceCurrentValue ? Number(button.dataset.priceCurrentValue) : null;
+  const element = ensureAdvancedReconcilePriceModal();
+  const quantity = Number(button.dataset.priceQuantity || 0);
+  const currentPrice = button.dataset.priceCurrent || null;
+  const currentValue = button.dataset.priceCurrentValue
+    ? Number(button.dataset.priceCurrentValue)
+    : null;
 
-    advancedReconcilePriceContext = {
-        investmentId: button.dataset.priceInvestment,
-        storedPriceId: button.dataset.priceStoredId || null,
-        date: button.dataset.priceDate,
-        side: button.dataset.priceSide,
-        quantity: quantity,
-    };
+  advancedReconcilePriceContext = {
+    investmentId: button.dataset.priceInvestment,
+    storedPriceId: button.dataset.priceStoredId || null,
+    date: button.dataset.priceDate,
+    side: button.dataset.priceSide,
+    quantity: quantity,
+  };
 
-    element.querySelector('#advancedReconcilePriceInvestment').textContent = button.dataset.priceInvestmentName || '';
-    element.querySelector('#advancedReconcilePriceMeta').textContent = __(':side price for :date', {
-        side: button.dataset.priceSide === 'open' ? __('Opening') : __('Closing'),
-        date: button.dataset.priceDate,
-    });
-    element.querySelector('#advancedReconcilePriceInput').value = currentPrice ?? '';
-    element.querySelector('#advancedReconcileValueInput').value = currentValue || '';
-    element.querySelector('#advancedReconcileValueHelp').textContent = __('Quantity at this date: :quantity', {
-        quantity: quantity,
-    });
-    element.querySelector('#advancedReconcilePriceError').classList.add('d-none');
+  element.querySelector('#advancedReconcilePriceInvestment').textContent =
+    button.dataset.priceInvestmentName || '';
+  element.querySelector('#advancedReconcilePriceMeta').textContent = __(
+    ':side price for :date',
+    {
+      side: button.dataset.priceSide === 'open' ? __('Opening') : __('Closing'),
+      date: button.dataset.priceDate,
+    },
+  );
+  element.querySelector('#advancedReconcilePriceInput').value =
+    currentPrice ?? '';
+  element.querySelector('#advancedReconcileValueInput').value =
+    currentValue || '';
+  element.querySelector('#advancedReconcileValueHelp').textContent = __(
+    'Quantity at this date: :quantity',
+    {
+      quantity: quantity,
+    },
+  );
+  element.querySelector('#advancedReconcilePriceError').classList.add('d-none');
 
-    const valueTab = element.querySelector('#advancedReconcileValueTab');
-    valueTab.disabled = quantity === 0;
-    element.querySelector('#advancedReconcilePriceTab').click();
+  const valueTab = element.querySelector('#advancedReconcileValueTab');
+  valueTab.disabled = quantity === 0;
+  element.querySelector('#advancedReconcilePriceTab').click();
 
-    advancedReconcilePriceModal.show();
+  advancedReconcilePriceModal.show();
 }
 
 function saveAdvancedReconcilePrice(event) {
-    event.preventDefault();
+  event.preventDefault();
 
-    const modalElement = document.getElementById('advancedReconcilePriceModal');
-    const errorElement = modalElement.querySelector('#advancedReconcilePriceError');
-    const useValue = modalElement.querySelector('#advancedReconcileValuePanel').classList.contains('active');
-    const rawPrice = modalElement.querySelector('#advancedReconcilePriceInput').value;
-    const rawValue = modalElement.querySelector('#advancedReconcileValueInput').value;
-    let price = rawPrice;
+  const modalElement = document.getElementById('advancedReconcilePriceModal');
+  const errorElement = modalElement.querySelector(
+    '#advancedReconcilePriceError',
+  );
+  const useValue = modalElement
+    .querySelector('#advancedReconcileValuePanel')
+    .classList.contains('active');
+  const rawPrice = modalElement.querySelector(
+    '#advancedReconcilePriceInput',
+  ).value;
+  const rawValue = modalElement.querySelector(
+    '#advancedReconcileValueInput',
+  ).value;
+  let price = rawPrice;
 
-    errorElement.classList.add('d-none');
+  errorElement.classList.add('d-none');
 
-    if (useValue) {
-        if (!advancedReconcilePriceContext.quantity) {
-            errorElement.textContent = __('A holding value can only be converted when the quantity is not zero.');
-            errorElement.classList.remove('d-none');
-            return;
-        }
-
-        price = new Decimal(rawValue || 0).div(advancedReconcilePriceContext.quantity).toFixed(10);
+  if (useValue) {
+    if (!advancedReconcilePriceContext.quantity) {
+      errorElement.textContent = __(
+        'A holding value can only be converted when the quantity is not zero.',
+      );
+      errorElement.classList.remove('d-none');
+      return;
     }
 
-    if (!Number.isFinite(Number(price)) || Number(price) <= 0) {
-        errorElement.textContent = __('Enter a price greater than zero.');
-        errorElement.classList.remove('d-none');
-        return;
-    }
+    price = new Decimal(rawValue || 0)
+      .div(advancedReconcilePriceContext.quantity)
+      .toFixed(10);
+  }
 
-    const payload = {
-        investment_id: advancedReconcilePriceContext.investmentId,
-        date: advancedReconcilePriceContext.date,
-        price: new Decimal(price).toFixed(10),
-    };
+  if (!Number.isFinite(Number(price)) || Number(price) <= 0) {
+    errorElement.textContent = __('Enter a price greater than zero.');
+    errorElement.classList.remove('d-none');
+    return;
+  }
 
-    const request = advancedReconcilePriceContext.storedPriceId
-        ? axios.put(window.route('api.v1.investment-prices.update', { investmentPrice: advancedReconcilePriceContext.storedPriceId }), {
-            ...payload,
-            id: advancedReconcilePriceContext.storedPriceId,
-        })
-        : axios.post(window.route('api.v1.investment-prices.store'), payload);
+  const payload = {
+    investment_id: advancedReconcilePriceContext.investmentId,
+    date: advancedReconcilePriceContext.date,
+    price: new Decimal(price).toFixed(10),
+  };
 
-    request.then(() => {
-        toastHelpers.showSuccessToast(__('Investment price saved'));
-        advancedReconcilePriceModal.hide();
-        loadAdvancedReconcile();
-    }).catch((error) => {
-        errorElement.textContent = error.response?.data?.message || error.message;
-        errorElement.classList.remove('d-none');
+  const request = advancedReconcilePriceContext.storedPriceId
+    ? axios.put(
+        window.route('api.v1.investment-prices.update', {
+          investmentPrice: advancedReconcilePriceContext.storedPriceId,
+        }),
+        {
+          ...payload,
+          id: advancedReconcilePriceContext.storedPriceId,
+        },
+      )
+    : axios.post(window.route('api.v1.investment-prices.store'), payload);
+
+  request
+    .then(() => {
+      toastHelpers.showSuccessToast(__('Investment price saved'));
+      advancedReconcilePriceModal.hide();
+      loadAdvancedReconcile();
+    })
+    .catch((error) => {
+      errorElement.textContent = error.response?.data?.message || error.message;
+      errorElement.classList.remove('d-none');
     });
 }
 

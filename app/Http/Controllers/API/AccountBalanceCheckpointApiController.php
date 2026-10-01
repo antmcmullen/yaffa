@@ -13,22 +13,18 @@ use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
-use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Attributes\Controllers\Middleware;
 use Illuminate\Support\Facades\Gate;
 
-class AccountBalanceCheckpointApiController extends Controller implements HasMiddleware
+#[Middleware('auth:sanctum')]
+#[Middleware('verified')]
+#[Middleware('abilities:read', only: ['accountSummary', 'dashboard'])]
+#[Middleware('abilities:write', only: ['store'])]
+class AccountBalanceCheckpointApiController extends Controller
 {
     public function __construct(
         private readonly AdvancedReconcileService $advancedReconcileService,
     ) {
-    }
-
-    public static function middleware(): array
-    {
-        return [
-            'auth:sanctum',
-            'verified',
-        ];
     }
 
     /**

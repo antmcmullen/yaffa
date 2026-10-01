@@ -103,9 +103,11 @@
       return null;
     }
 
-    return (groups || [])
-      .flatMap((group) => group.options || [])
-      .find((option) => option.value === preset) || null;
+    return (
+      (groups || [])
+        .flatMap((group) => group.options || [])
+        .find((option) => option.value === preset) || null
+    );
   }
 
   function resolvePresetDates(preset, groups) {
@@ -237,7 +239,10 @@
     },
     methods: {
       onPresetChange() {
-        const dates = resolvePresetDates(this.selectedPreset, this.presetGroups);
+        const dates = resolvePresetDates(
+          this.selectedPreset,
+          this.presetGroups,
+        );
         if (dates) {
           this.dateFrom = formatDate(dates.start);
           this.dateTo = formatDate(dates.end);

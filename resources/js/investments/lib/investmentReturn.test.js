@@ -11,8 +11,7 @@ import {
   quantityBefore,
 } from './investmentReturn.js';
 
-// Mirrors App\Enums\TransactionType::quantityMultiplier() - the only field
-// computeInvestmentReturn reads from it.
+// Mirrors the quantity and cashflow signs supplied by App\Enums\TransactionType.
 function getTypeConfig(type) {
   const quantity_multiplier = {
     buy: 1,

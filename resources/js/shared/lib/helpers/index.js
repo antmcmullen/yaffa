@@ -76,13 +76,13 @@ export function escapeHtmlWithLineBreaks(value) {
  * @returns {Promise<*>}
  */
 export async function jsonFromResponse(response) {
-    const data = await response.json();
+  const data = await response.json();
 
-    if (!response.ok) {
-        throw new Error(data.message || response.statusText);
-    }
+  if (!response.ok) {
+    throw new Error(data.message || response.statusText);
+  }
 
-    return data;
+  return data;
 }
 
 /**

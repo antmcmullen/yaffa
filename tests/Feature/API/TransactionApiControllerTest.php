@@ -2631,7 +2631,7 @@ class TransactionApiControllerTest extends TestCase
     }
     public function test_can_store_special_investment_transaction_types(): void
     {
-        Sanctum::actingAs($this->user);
+        Sanctum::actingAs($this->user, ['*']);
 
         $currency = Currency::factory()->for($this->user)->create();
         $account = Account::factory()->withUser($this->user)->create(['currency_id' => $currency->id]);
@@ -2641,7 +2641,7 @@ class TransactionApiControllerTest extends TestCase
             'config_id' => $account->id,
             'active' => true,
         ]);
-        $investment = Investment::factory()->for($this->user)->create(['currency_id' => $currency->id]);
+        $investment = Investment::factory()->withUser($this->user)->create(['currency_id' => $currency->id]);
 
         $cases = [
             TransactionTypeEnum::PURCHASED_INTEREST->value => [['dividend' => 100], -100],

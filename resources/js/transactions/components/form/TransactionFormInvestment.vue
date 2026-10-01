@@ -334,13 +334,15 @@
                         {{ __('Store price') }}
                       </label>
                       <button
-                        class="btn btn-outline-secondary"
+                        v-if="shouldShowCalcPriceButton"
                         id="calc_price_button"
+                        class="btn btn-outline-secondary"
                         type="button"
                         :title="
-                          __('Calculate price from cashflow, commission, tax and quantity')
+                          __(
+                            'Calculate price from cashflow, commission, tax and quantity',
+                          )
                         "
-                        v-if="shouldShowCalcPriceButton"
                         @click="calculatePriceFromCashflow"
                       >
                         {{ __('Calc price') }}
@@ -527,8 +529,12 @@
 </template>
 
 <script>
+  import * as toastHelpers from '@/shared/lib/toast';
   import { RRule } from 'rrule';
-  import { investmentCashflow, priceFromCashflow } from '@/investments/lib/investmentCashflow';
+  import {
+    investmentCashflow,
+    priceFromCashflow,
+  } from '@/investments/lib/investmentCashflow';
   import MathInput from '@/shared/ui/form/MathInput.vue';
   import { confirmAction } from '@/shared/lib/confirm';
 
@@ -686,7 +692,10 @@
       // from the API as decimal strings (MoneyCast), which native `+` would silently
       // string-concatenate instead of add.
       total() {
-        return investmentCashflow(this.form.config, this.transactionTypeSettings).toNumber();
+        return investmentCashflow(
+          this.form.config,
+          this.transactionTypeSettings,
+        ).toNumber();
       },
 
       transactionTypeSettings() {
@@ -763,7 +772,9 @@
       },
 
       shouldShowCalcPriceButton() {
-        return this.isBaseSettingsEditsAllowed && this.transactionTypeSettings.price;
+        return (
+          this.isBaseSettingsEditsAllowed && this.transactionTypeSettings.price
+        );
       },
 
       // Should we show the "Store this as a price" checkbox?
@@ -1460,20 +1471,33 @@
       },
 
       calculatePriceFromCashflow() {
-        if (!this.form.config.quantity || Number(this.form.config.quantity) <= 0) {
-          toastHelpers.showWarningToast(__('Enter quantity first to calculate the price'));
+        if (
+          !this.form.config.quantity ||
+          Number(this.form.config.quantity) <= 0
+        ) {
+          toastHelpers.showWarningToast(
+            __('Enter quantity first to calculate the price'),
+          );
           return;
         }
 
-        const cashflow = window.prompt(__('Enter total cashflow value (negative for purchases)'));
+        const cashflow = window.prompt(
+          __('Enter total cashflow value (negative for purchases)'),
+        );
         if (cashflow === null) return;
         if (cashflow.trim() === '' || !Number.isFinite(Number(cashflow))) {
-          toastHelpers.showWarningToast(__('Please enter a valid cashflow value'));
+          toastHelpers.showWarningToast(
+            __('Please enter a valid cashflow value'),
+          );
           return;
         }
 
         try {
-          this.form.config.price = priceFromCashflow(this.form.config, this.transactionTypeSettings, cashflow.trim());
+          this.form.config.price = priceFromCashflow(
+            this.form.config,
+            this.transactionTypeSettings,
+            cashflow.trim(),
+          );
           this.onPriceChange();
         } catch (error) {
           toastHelpers.showWarningToast(__(error.message));

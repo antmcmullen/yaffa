@@ -462,17 +462,23 @@ export const transactionColumnDefinition = {
         }
         if (typeConfig.category === 'investment') {
           const amount = investmentCashflow(row.config, typeConfig);
-          return (amount.isNegative() ? '- ' : '+ ') + toFormattedCurrency(
-            type,
-            amount.abs().toNumber(),
-            window.YAFFA.userSettings.locale,
-            row.transaction_currency,
+          return (
+            (amount.isNegative() ? '- ' : '+ ') +
+            toFormattedCurrency(
+              type,
+              amount.abs().toNumber(),
+              window.YAFFA.userSettings.locale,
+              row.transaction_currency,
+            )
           );
         }
       }
 
       if (typeConfig.category === 'standard') {
         return row.config.amount_to;
+      }
+      if (typeConfig.category === 'investment') {
+        return investmentCashflow(row.config, typeConfig).toNumber();
       }
     },
     className: 'dt-nowrap',

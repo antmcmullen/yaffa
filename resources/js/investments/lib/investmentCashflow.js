@@ -6,8 +6,16 @@ export function investmentCashflow(config, type) {
   return new ExactDecimal(config.quantity ?? 0)
     .times(config.price ?? 0)
     .times(type.amount_multiplier ?? 0)
-    .plus(new ExactDecimal(config.dividend ?? 0).times(type.dividend_multiplier ?? 1))
-    .plus(new ExactDecimal(config.commission ?? 0).times(type.commission_multiplier ?? -1))
+    .plus(
+      new ExactDecimal(config.dividend ?? 0).times(
+        type.dividend_multiplier ?? 1,
+      ),
+    )
+    .plus(
+      new ExactDecimal(config.commission ?? 0).times(
+        type.commission_multiplier ?? -1,
+      ),
+    )
     .plus(new ExactDecimal(config.tax ?? 0).times(type.tax_multiplier ?? -1));
 }
 

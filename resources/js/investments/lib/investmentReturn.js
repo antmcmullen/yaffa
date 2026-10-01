@@ -118,8 +118,12 @@ export function computeInvestmentReturn({
     const comm =
       cfg.commission != null ? new Decimal(cfg.commission) : new Decimal(0);
     const typeConfig = getTypeConfig(t.transaction_type);
-    const tax = new Decimal(cfg.tax ?? 0).times(-(typeConfig.tax_multiplier ?? -1));
-    const div = new Decimal(cfg.dividend ?? 0).times(typeConfig.dividend_multiplier ?? 1);
+    const tax = new Decimal(cfg.tax ?? 0).times(
+      -(typeConfig.tax_multiplier ?? -1),
+    );
+    const div = new Decimal(cfg.dividend ?? 0).times(
+      typeConfig.dividend_multiplier ?? 1,
+    );
     commission = commission.plus(comm);
     taxes = taxes.plus(tax);
     dividend = dividend.plus(div);
