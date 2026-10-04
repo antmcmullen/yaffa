@@ -10,11 +10,7 @@ param(
 
     [string[]]$FeatureBranches = @(
         "add_reconcile",
-<<<<<<< Updated upstream
-        "investment-active-first",
-=======
         "fix/investments-active-first",
->>>>>>> Stashed changes
         "sync-tools"
     )
 )
