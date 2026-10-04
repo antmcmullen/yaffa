@@ -107,7 +107,7 @@ export function computeInvestmentReturn({
   let selling = new Decimal(0); // gross (price x quantity), informational only
   let added = new Decimal(0);
   let removed = new Decimal(0);
-  let dividend = new Decimal(0); // raw dividend/interest_yield field, informational only
+  let dividend = new Decimal(0);
   let commission = new Decimal(0);
   let taxes = new Decimal(0);
   let cashFlowGain = new Decimal(0);
@@ -117,9 +117,17 @@ export function computeInvestmentReturn({
     const cfg = t.config || {};
     const comm =
       cfg.commission != null ? new Decimal(cfg.commission) : new Decimal(0);
-    const tax = cfg.tax != null ? new Decimal(cfg.tax) : new Decimal(0);
+    const typeConfig = getTypeConfig(t.transaction_type);
+    const tax = new Decimal(cfg.tax ?? 0).times(
+      -(typeConfig.tax_multiplier ?? -1),
+    );
+    const div = new Decimal(cfg.dividend ?? 0).times(
+      typeConfig.dividend_multiplier ?? 1,
+    );
     commission = commission.plus(comm);
     taxes = taxes.plus(tax);
+    dividend = dividend.plus(div);
+    cashFlowGain = cashFlowGain.plus(div).minus(comm).minus(tax);
 
     if (
       t.transaction_type === 'buy' &&
@@ -129,7 +137,7 @@ export function computeInvestmentReturn({
       const gross = new Decimal(cfg.price).times(cfg.quantity);
       buying = buying.plus(gross);
       const netCost = gross.plus(comm).plus(tax);
-      cashFlowGain = cashFlowGain.minus(netCost);
+      cashFlowGain = cashFlowGain.minus(gross);
       const weight =
         periodMs > 0
           ? Math.min(1, Math.max(0, (dateTo - new Date(t.date)) / periodMs))
@@ -144,23 +152,13 @@ export function computeInvestmentReturn({
     ) {
       const gross = new Decimal(cfg.price).times(cfg.quantity);
       selling = selling.plus(gross);
-      cashFlowGain = cashFlowGain.plus(gross.minus(comm).minus(tax));
-    } else if (
-      t.transaction_type === 'dividend' ||
-      t.transaction_type === 'interest_yield'
-    ) {
-      const div =
-        cfg.dividend != null ? new Decimal(cfg.dividend) : new Decimal(0);
-      dividend = dividend.plus(div);
-      cashFlowGain = cashFlowGain.plus(div.minus(comm).minus(tax));
+      cashFlowGain = cashFlowGain.plus(gross);
     } else if (t.transaction_type === 'add_shares') {
       added = added.plus(cfg.quantity != null ? new Decimal(cfg.quantity) : 0);
-      cashFlowGain = cashFlowGain.minus(comm).minus(tax);
     } else if (t.transaction_type === 'remove_shares') {
       removed = removed.plus(
         cfg.quantity != null ? new Decimal(cfg.quantity) : 0,
       );
-      cashFlowGain = cashFlowGain.minus(comm).minus(tax);
     }
   }
 

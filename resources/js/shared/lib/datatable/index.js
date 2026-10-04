@@ -1,3 +1,4 @@
+import { investmentCashflow } from '@/investments/lib/investmentCashflow';
 import {
   __,
   toFormattedCurrency as toFormattedCurrencyHelper,
@@ -465,41 +466,24 @@ export const transactionColumnDefinition = {
           );
         }
         if (typeConfig.category === 'investment') {
-          let amount =
-            (row.config.quantity ?? 0) * (row.config.price ?? 0) +
-            (row.config.dividend ?? 0);
-
-          if (typeConfig.amount_multiplier === -1) {
-            prefix = '- ';
-            amount = amount + row.config.commission + row.config.tax;
-            return (
-              prefix +
-              toFormattedCurrency(
-                type,
-                amount,
-                window.YAFFA.userSettings.locale,
-                row.transaction_currency,
-              )
-            );
-          }
-          if (typeConfig.amount_multiplier === 1) {
-            prefix = '+ ';
-            amount = amount - row.config.commission - row.config.tax;
-            return (
-              prefix +
-              toFormattedCurrency(
-                type,
-                amount,
-                window.YAFFA.userSettings.locale,
-                row.transaction_currency,
-              )
-            );
-          }
+          const amount = investmentCashflow(row.config, typeConfig);
+          return (
+            (amount.isNegative() ? '- ' : '+ ') +
+            toFormattedCurrency(
+              type,
+              amount.abs().toNumber(),
+              window.YAFFA.userSettings.locale,
+              row.transaction_currency,
+            )
+          );
         }
       }
 
       if (typeConfig.category === 'standard') {
         return row.config.amount_to;
+      }
+      if (typeConfig.category === 'investment') {
+        return investmentCashflow(row.config, typeConfig).toNumber();
       }
     },
     className: 'dt-nowrap',

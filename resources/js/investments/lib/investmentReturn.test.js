@@ -11,8 +11,7 @@ import {
   quantityBefore,
 } from './investmentReturn.js';
 
-// Mirrors App\Enums\TransactionType::quantityMultiplier() - the only field
-// computeInvestmentReturn reads from it.
+// Mirrors the quantity and cashflow signs supplied by App\Enums\TransactionType.
 function getTypeConfig(type) {
   const quantity_multiplier = {
     buy: 1,
@@ -22,7 +21,11 @@ function getTypeConfig(type) {
     dividend: null,
     interest_yield: null,
   }[type];
-  return { quantity_multiplier: quantity_multiplier ?? null };
+  return {
+    quantity_multiplier: quantity_multiplier ?? null,
+    dividend_multiplier: type === 'purchased_interest' ? -1 : 1,
+    tax_multiplier: type === 'tax_relief' ? 1 : -1,
+  };
 }
 
 let nextId = 1;
@@ -31,6 +34,41 @@ function tx(type, date, config = {}) {
 }
 
 const day = (n) => new Date(`2026-01-${String(n).padStart(2, '0')}T00:00:00Z`);
+
+test('purchased interest, tax relief and product fees contribute with their cashflow signs', () => {
+  const r = run({
+    dateFrom: day(1),
+    dateTo: day(31),
+    transactions: [
+      tx('buy', new Date('2025-12-01'), { quantity: '100', price: '10' }),
+      tx('dividend', day(3), { dividend: '50.1250', tax: '5.0000' }),
+      tx('purchased_interest', day(4), { dividend: '20.2500' }),
+      tx('product_fee', day(5), { commission: '3.3750' }),
+      tx('tax_relief', day(6), { tax: '10.0000' }),
+      tx('purchased_interest', new Date('2026-02-01'), { dividend: '999' }),
+    ],
+  });
+  assert.equal(r.dividend.toString(), '29.875');
+  assert.equal(r.taxes.toString(), '-5');
+  assert.equal(r.commission.toString(), '3.375');
+  assert.equal(r.gain.toString(), '31.5');
+  assert.equal(r.roi, 0.0315);
+  assert.equal(r.closingQuantity.toString(), '100');
+});
+
+test('negative dividend corrections reduce investment return', () => {
+  const r = run({
+    dateFrom: day(1),
+    dateTo: day(31),
+    transactions: [
+      tx('buy', new Date('2025-12-01'), { quantity: '100', price: '10' }),
+      tx('dividend', day(4), { dividend: '-12.50' }),
+    ],
+  });
+  assert.equal(r.dividend.toString(), '-12.5');
+  assert.equal(r.gain.toString(), '-12.5');
+  assert.equal(r.roi, -0.0125);
+});
 
 function run(opts) {
   return computeInvestmentReturn({ getTypeConfig, prices: [], ...opts });

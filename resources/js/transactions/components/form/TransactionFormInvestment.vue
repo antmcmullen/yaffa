@@ -331,6 +331,20 @@
                       >
                         {{ __('Store price') }}
                       </label>
+                      <button
+                        v-if="shouldShowCalcPriceButton"
+                        id="calc_price_button"
+                        class="btn btn-outline-secondary"
+                        type="button"
+                        :title="
+                          __(
+                            'Calculate price from cashflow, commission, tax and quantity',
+                          )
+                        "
+                        @click="calculatePriceFromCashflow"
+                      >
+                        {{ __('Calc price') }}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -515,8 +529,12 @@
 </template>
 
 <script>
+  import * as toastHelpers from '@/shared/lib/toast';
   import { RRule } from 'rrule';
-  import Decimal from 'decimal.js';
+  import {
+    investmentCashflow,
+    priceFromCashflow,
+  } from '@/investments/lib/investmentCashflow';
   import MathInput from '@/shared/ui/form/MathInput.vue';
   import { confirmAction } from '@/shared/lib/confirm';
 
@@ -680,22 +698,10 @@
       // from the API as decimal strings (MoneyCast), which native `+` would silently
       // string-concatenate instead of add.
       total() {
-        const quantity = new Decimal(this.form.config.quantity || 0);
-        const price = new Decimal(this.form.config.price || 0);
-        const dividend = new Decimal(this.form.config.dividend || 0);
-        const commission = new Decimal(this.form.config.commission || 0);
-        const tax = new Decimal(this.form.config.tax || 0);
-
-        return quantity
-          .times(price)
-          .plus(dividend)
-          .minus(
-            commission
-              .plus(tax)
-              // Taxes and commissions are added to the value when the transaction is a buy
-              .times(this.transactionTypeSettings.amount_multiplier || 0),
-          )
-          .toNumber();
+        return investmentCashflow(
+          this.form.config,
+          this.transactionTypeSettings,
+        ).toNumber();
       },
 
       transactionTypeSettings() {
@@ -769,6 +775,12 @@
       // Do we allow the user to edit the base settings?
       isBaseSettingsEditsAllowed() {
         return ['create', 'clone', 'finalize'].includes(this.action);
+      },
+
+      shouldShowCalcPriceButton() {
+        return (
+          this.isBaseSettingsEditsAllowed && this.transactionTypeSettings.price
+        );
       },
 
       // Should we show the "Store this as a price" checkbox?
@@ -862,8 +874,15 @@
             type.value,
           ),
           price: ['buy', 'sell'].includes(type.value),
-          dividend: ['dividend', 'interest_yield'].includes(type.value),
+          dividend: [
+            'dividend',
+            'interest_yield',
+            'purchased_interest',
+          ].includes(type.value),
           amount_multiplier: type.amount_multiplier,
+          dividend_multiplier: type.dividend_multiplier,
+          commission_multiplier: type.commission_multiplier,
+          tax_multiplier: type.tax_multiplier,
         }));
 
       // Copy values of existing transaction into component form data
@@ -1371,6 +1390,39 @@
         }, 500);
       },
 
+      calculatePriceFromCashflow() {
+        if (
+          !this.form.config.quantity ||
+          Number(this.form.config.quantity) <= 0
+        ) {
+          toastHelpers.showWarningToast(
+            __('Enter quantity first to calculate the price'),
+          );
+          return;
+        }
+
+        const cashflow = window.prompt(
+          __('Enter total cashflow value (negative for purchases)'),
+        );
+        if (cashflow === null) return;
+        if (cashflow.trim() === '' || !Number.isFinite(Number(cashflow))) {
+          toastHelpers.showWarningToast(
+            __('Please enter a valid cashflow value'),
+          );
+          return;
+        }
+
+        try {
+          this.form.config.price = priceFromCashflow(
+            this.form.config,
+            this.transactionTypeSettings,
+            cashflow.trim(),
+          );
+          this.onPriceChange();
+        } catch (error) {
+          toastHelpers.showWarningToast(__(error.message));
+        }
+      },
       async storePriceIfEnabled(transaction) {
         if (!this.storePriceEnabled || !transaction.config.price) {
           return;

@@ -521,7 +521,7 @@ class TransactionRequest extends FormRequest
         }
 
         // Dividend OR Interest yield
-        if ($transactionTypeEnum === TransactionTypeEnum::DIVIDEND || $transactionTypeEnum === TransactionTypeEnum::INTEREST_YIELD) {
+        if (in_array($transactionTypeEnum, [TransactionTypeEnum::DIVIDEND, TransactionTypeEnum::INTEREST_YIELD, TransactionTypeEnum::PURCHASED_INTEREST], true)) {
             return [
                 'config.dividend' => [
                     'required',
@@ -531,6 +531,14 @@ class TransactionRequest extends FormRequest
                     'max:99999999.9999',
                     'decimal:0,4',
                 ],
+            ];
+        }
+
+        if (in_array($transactionTypeEnum, [TransactionTypeEnum::PRODUCT_FEE, TransactionTypeEnum::TAX_RELIEF], true)) {
+            $field = $transactionTypeEnum === TransactionTypeEnum::PRODUCT_FEE ? 'commission' : 'tax';
+
+            return [
+                'config.' . $field => ['required', 'numeric', 'gt:0', 'max:9999999999.9999', 'decimal:0,4'],
             ];
         }
 
