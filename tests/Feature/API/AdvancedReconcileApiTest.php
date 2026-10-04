@@ -101,33 +101,45 @@ class AdvancedReconcileApiTest extends TestCase
         Sanctum::actingAs($this->user, ['*']);
 
         $this->createJulyCashMovements();
-        $this->postJson(route('api.v1.accounts.balance-checkpoints.store', [
-            'accountEntity' => $this->account,
-        ]), [
-            'checkpoint_date' => '2026-07-31',
-            'checkpoint_type' => 'cash',
-            'balance' => 120,
-            'note' => 'July statement',
-        ])->assertCreated();
+        $this->createDeposit('2026-07-06', 0.48);
 
-        $this->getJulySummary()
-            ->assertOk()
-            ->assertJsonPath('cash.status', 'matched')
-            ->assertJsonPath('cash.variance', 0);
+        foreach (['cash', 'total'] as $type) {
+            $this->postJson(route('api.v1.accounts.balance-checkpoints.store', [
+                'accountEntity' => $this->account,
+            ]), [
+                'checkpoint_date' => '2026-07-31',
+                'checkpoint_type' => $type,
+                'balance' => '120.48',
+                'note' => 'July statement',
+            ])->assertCreated();
+
+            $this->getJulySummary()
+                ->assertOk()
+                ->assertJsonPath("{$type}.balance", 120.48)
+                ->assertJsonPath("{$type}.status", 'matched')
+                ->assertJsonPath("{$type}.variance", 0);
+
+            $this->getJson(route('api.v1.reports.advanced-reconcile', [
+                'checkpoint_type' => $type,
+            ]))->assertOk()
+                ->assertJsonPath('rows.0.months.2026-07.calculated_balance', 120.48)
+                ->assertJsonPath('rows.0.months.2026-07.status', 'matched')
+                ->assertJsonPath('rows.0.months.2026-07.variance', 0);
+        }
     }
 
     public function test_dashboard_marks_variance_as_reconcile_required(): void
     {
         Sanctum::actingAs($this->user, ['*']);
 
-        $this->createDeposit('2026-07-05', 50);
+        $this->createDeposit('2026-07-05', 50.48);
 
         $this->postJson(route('api.v1.accounts.balance-checkpoints.store', [
             'accountEntity' => $this->account,
         ]), [
             'checkpoint_date' => '2026-07-31',
             'checkpoint_type' => 'cash',
-            'balance' => 200,
+            'balance' => '150.24',
         ])->assertCreated();
 
         $response = $this->getJson(route('api.v1.reports.advanced-reconcile', [
@@ -137,7 +149,12 @@ class AdvancedReconcileApiTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('rows.0.months.2026-07.status', 'reconcile_required');
-        $response->assertJsonPath('rows.0.months.2026-07.variance', 50);
+        $response->assertJsonPath('rows.0.months.2026-07.variance', -0.24);
+
+        $this->getJulySummary()
+            ->assertOk()
+            ->assertJsonPath('cash.status', 'reconcile_required')
+            ->assertJsonPath('cash.variance', -0.24);
     }
 
     public function test_investment_holdings_include_statement_price_editing_metadata(): void
@@ -175,6 +192,29 @@ class AdvancedReconcileApiTest extends TestCase
         $response->assertJsonPath('investment.holdings.0.close_price', 15.67);
         $response->assertJsonPath('investment.holdings.0.open_stored_price_id', $openingPrice->id);
         $response->assertJsonPath('investment.holdings.0.close_stored_price_id', null);
+
+        foreach (['investment', 'total'] as $type) {
+            $this->postJson(route('api.v1.accounts.balance-checkpoints.store', [
+                'accountEntity' => $this->account,
+            ]), [
+                'checkpoint_date' => '2026-07-31',
+                'checkpoint_type' => $type,
+                'balance' => '156.70',
+            ])->assertCreated();
+
+            $this->getJulySummary()
+                ->assertOk()
+                ->assertJsonPath("{$type}.balance", 156.7)
+                ->assertJsonPath("{$type}.status", 'matched')
+                ->assertJsonPath("{$type}.variance", 0);
+
+            $this->getJson(route('api.v1.reports.advanced-reconcile', [
+                'checkpoint_type' => $type,
+            ]))->assertOk()
+                ->assertJsonPath('rows.0.months.2026-07.calculated_balance', 156.7)
+                ->assertJsonPath('rows.0.months.2026-07.status', 'matched')
+                ->assertJsonPath('rows.0.months.2026-07.variance', 0);
+        }
     }
 
     public function test_user_cannot_save_checkpoint_for_another_users_account(): void

@@ -86,7 +86,7 @@ class AdvancedReconcileService
             : Carbon::parse($previousCheckpointDate)->addDay();
 
         $calculatedBalance = $this->calculatedBalanceAt($accountEntity, $checkpoint->checkpoint_date, $checkpointType);
-        $variance = $this->rounded(BigDecimal::of($checkpoint->balance)->minus($calculatedBalance));
+        $variance = $this->rounded(BigDecimal::of($checkpoint->balance)->minus(BigDecimal::fromFloatShortest($calculatedBalance)));
 
         return [
             'status' => abs($variance) < 0.01 ? 'matched' : 'reconcile_required',
@@ -112,7 +112,7 @@ class AdvancedReconcileService
             return $investmentBalance;
         }
 
-        return $this->rounded($cashBalance->plus($investmentBalance));
+        return $this->rounded($cashBalance->plus(BigDecimal::fromFloatShortest($investmentBalance)));
     }
 
     /**
@@ -411,7 +411,7 @@ class AdvancedReconcileService
      */
     private function withCheckpointState(array $section, ?AccountBalanceCheckpoint $checkpoint, float $calculatedBalance): array
     {
-        $variance = $checkpoint === null ? null : $this->rounded(BigDecimal::of($checkpoint->balance)->minus($calculatedBalance));
+        $variance = $checkpoint === null ? null : $this->rounded(BigDecimal::of($checkpoint->balance)->minus(BigDecimal::fromFloatShortest($calculatedBalance)));
 
         return array_merge($section, [
             'checkpoint' => $checkpoint,
