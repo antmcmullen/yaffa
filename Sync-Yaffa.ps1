@@ -10,7 +10,8 @@ param(
 
     [string[]]$FeatureBranches = @(
         "add_reconcile",
-        "investment-active-first"
+        "investment-active-first",
+        "sync-tools"
     )
 )
 
