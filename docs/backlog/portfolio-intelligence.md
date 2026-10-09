@@ -1,17 +1,17 @@
 # Portfolio Intelligence Enhancement Backlog
 
-Status: discovery and planning. Base: `develop`. Reference applications: Ghostfolio and Wealthfolio.
+Status: discovery and planning. Base: `develop`. Scope: enhance YAFFA's native investment analytics and financial overview.
 
 ## Principles
 - Retain YAFFA's existing Laravel architecture, account, transaction, investment, investment-group and price-provider models.
 - Audit implementation and tests before classifying any feature as missing.
-- Avoid copying AGPL-licensed Ghostfolio implementation into MIT-licensed YAFFA without a deliberate licensing decision.
+- Evaluate third-party licensing and attribution before adopting any external implementation; prefer independently developed functionality.
 - Use feature branches and PRs targeting develop; follow engineering standards, responsive/mobile accessibility, and production readiness.
 - Preserve multi-currency precision, price provenance, and reconciliation with existing transactions.
 
 ## P0 — Discovery and specification
 - [ ] Inventory existing investment UI, models, services, routes, reporting, price providers and tests; document verified coverage.
-- [ ] Build Ghostfolio/Wealthfolio/Yaffa capability matrix: present, partial, missing, out of scope, with evidence links.
+- [ ] Build a YAFFA capability matrix: present, partial, missing, out of scope, with repository evidence links.
 - [ ] Document data contracts for holdings, investment transactions, cashflows, dividends, fees, transfers, corporate actions, splits, FX, historical prices and benchmarks.
 - [ ] Audit existing calculations for correctness: realised/unrealised gain, cost basis, currency conversion, income, fees, and missing-price behaviour.
 - [ ] Define UX wireframes and acceptance criteria for desktop and mobile, including accessible charts and tabular alternatives.
