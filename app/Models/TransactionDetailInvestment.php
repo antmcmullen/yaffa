@@ -69,7 +69,7 @@ class TransactionDetailInvestment extends Model
     {
         return [
             'price' => MoneyCast::class . ':10,resolveInvestmentCurrency',
-            'quantity' => DecimalCast::class . ':4',
+            'quantity' => DecimalCast::class . ':10',
             'commission' => MoneyCast::class . ':4,resolveAccountCurrency',
             'tax' => MoneyCast::class . ':4,resolveAccountCurrency',
             'dividend' => MoneyCast::class . ':4,resolveAccountCurrency',

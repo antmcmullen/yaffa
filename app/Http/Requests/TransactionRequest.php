@@ -499,9 +499,9 @@ class TransactionRequest extends FormRequest
                     'required',
                     'numeric',
                     'gt:0',
-                    // Fit in signed DECIMAL(14,4) range
-                    'max:9999999999.9999',
-                    'decimal:0,4',
+                    // Fit in signed DECIMAL(20,10) range
+                    'max:9999999999.9999999999',
+                    'decimal:0,10',
                 ],
             ];
         }
@@ -513,9 +513,9 @@ class TransactionRequest extends FormRequest
                     'required',
                     'numeric',
                     'gt:0',
-                    // Fit in signed DECIMAL(14,4) range
-                    'max:9999999999.9999',
-                    'decimal:0,4',
+                    // Fit in signed DECIMAL(20,10) range
+                    'max:9999999999.9999999999',
+                    'decimal:0,10',
                 ],
             ];
         }

@@ -6,7 +6,11 @@ import am4themes_kelly from '@amcharts/amcharts4/themes/kelly';
 am4core.useTheme(am4themes_animated);
 am4core.useTheme(am4themes_kelly);
 
-import { __, toFormattedCurrency, toFormattedNumber } from '@/shared/lib/i18n';
+import {
+  __,
+  toFormattedCurrency,
+  toFormattedQuantity,
+} from '@/shared/lib/i18n';
 import {
   applyAmChartsColorTheme,
   COLOR_MODE_EVENT,
@@ -14,6 +18,7 @@ import {
 import { applyAmChartsLocalization } from '@/shared/lib/i18n/amcharts';
 import * as toastHelpers from '@/shared/lib/toast';
 import { investmentGroupTree } from '@/shared/lib/datatable';
+import { getInvestmentValue } from '@/investments/lib/valuation';
 
 window.chartData = [];
 let chart;
@@ -78,6 +83,7 @@ function initializeChart() {
 {openDateX} - {dateX}
 ${__('Last quantity')}: {formatted_quantity}
 ${__('Estimated end value')}: {formatted_value}`;
+  series1.itemReaderText = `{name}. ${__('Last quantity')}: {formatted_quantity}. ${__('Estimated end value')}: {formatted_value}`;
 
   series1.dataFields.openDateX = 'start';
   series1.dataFields.dateX = 'end';
@@ -170,21 +176,20 @@ fetch('/api/v1/investments/timeline')
   .then((response) => response.json())
   .then(function (data) {
     window.chartData = data.map(function (item) {
-      item.value = item.quantity * item.last_price;
+      item.value = getInvestmentValue(item.quantity, item.last_price);
 
-      item.formatted_quantity = toFormattedNumber(
+      item.formatted_quantity = toFormattedQuantity(
         item.quantity,
         window.YAFFA.userSettings.locale,
-        {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 4,
-        },
       );
-      item.formatted_value = toFormattedCurrency(
-        item.value,
-        window.YAFFA.userSettings.locale,
-        item.currency,
-      );
+      item.formatted_value =
+        item.value == null
+          ? __('Unknown (unpriced)')
+          : toFormattedCurrency(
+              item.value,
+              window.YAFFA.userSettings.locale,
+              item.currency,
+            );
 
       return item;
     });

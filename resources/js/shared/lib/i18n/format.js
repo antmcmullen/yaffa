@@ -134,6 +134,20 @@ export function toFormattedNumber(input, locale, options = undefined) {
   return getCachedNumberFormatter(locale, options).format(Number(input));
 }
 
+export function toFormattedQuantity(input, locale) {
+  if (input === null || input === undefined) {
+    return '';
+  }
+  if (isNaN(input)) {
+    return input.toString();
+  }
+
+  return getCachedNumberFormatter(locale, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: STORAGE_SCALE.QUANTITY,
+  }).format(String(input));
+}
+
 /**
  * @param {*} input The value to be formatted as a date. Accepted as-is if already a Date. Otherwise
  * parsed via parseIsoDate (when allowIsoParse is true and input is a string) or via the native Date

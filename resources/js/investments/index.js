@@ -7,10 +7,11 @@ import {
   __,
   getDataTablesLanguageOptions,
   toFormattedCurrency,
-  toFormattedNumber,
+  toFormattedQuantity,
 } from '@/shared/lib/i18n';
 import * as toastHelpers from '@/shared/lib/toast';
 import { confirmDelete } from '@/shared/lib/confirm';
+import { getInvestmentValue } from '@/investments/lib/valuation';
 
 let ajaxIsBusy = false;
 let summaryRequest;
@@ -60,10 +61,7 @@ let table = $('#investmentSummary').DataTable({
       title: __('Quantity'),
       render: function (data, type) {
         if (type === 'display') {
-          return toFormattedNumber(data, window.YAFFA.userSettings.locale, {
-            maximumFractionDigits: 2,
-            useGrouping: true,
-          });
+          return toFormattedQuantity(data, window.YAFFA.userSettings.locale);
         }
         return data;
       },
@@ -74,6 +72,10 @@ let table = $('#investmentSummary').DataTable({
       data: 'price',
       title: __('Latest price'),
       render: function (data, type, row) {
+        if (data == null) {
+          return type === 'display' ? __('Unknown (unpriced)') : null;
+        }
+
         if (type === 'display' && !isNaN(data) && typeof data === 'number') {
           return toFormattedCurrency(
             data,
@@ -92,9 +94,13 @@ let table = $('#investmentSummary').DataTable({
       defaultContent: '',
       title: __('Value'),
       render: function (_data, type, row) {
-        const value = row.quantity * row.price;
+        const value = getInvestmentValue(row.quantity, row.price);
 
         if (type === 'display') {
+          if (value == null) {
+            return __('Unknown (unpriced)');
+          }
+
           return toFormattedCurrency(
             value,
             window.YAFFA.userSettings.locale,
@@ -124,6 +130,14 @@ let table = $('#investmentSummary').DataTable({
   ],
   order: [[0, 'asc']],
   initComplete: function (settings) {
+    const scrollBody = this.api()
+      .table()
+      .container()
+      .querySelector('.dt-scroll-body');
+    scrollBody.tabIndex = 0;
+    scrollBody.setAttribute('role', 'region');
+    scrollBody.setAttribute('aria-label', __('Scrollable investment holdings'));
+
     $(settings.table).on(
       'click',
       'td.activeIcon > i:not(.inProgress)',
@@ -222,6 +236,7 @@ let table = $('#investmentSummary').DataTable({
   },
   deferRender: true,
   scrollY: '500px',
+  scrollX: true,
   scrollCollapse: true,
   stateSave: false,
   processing: true,

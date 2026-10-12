@@ -43,7 +43,7 @@ The feature belongs under Reports because it is review-focused and analytical. I
 
 - The frontend fetches a timeline-oriented investment dataset from the investment API rather than a dedicated report-specific controller method.
 - Each item is rendered in a Gantt-like chart where the position spans from its start date to its end date.
-- Estimated value is derived client-side from quantity multiplied by the latest known price.
+- Estimated value is derived client-side from quantity multiplied by the latest known price. A non-zero holding with no known price is labelled "Unknown (unpriced)" in its tooltip; it is never presented as zero. A zero quantity has a known zero value even when no price is available, and a recorded zero price is also a known value.
 - The chart is localized for dates and number formatting and uses the user's end date as the maximum visible planning horizon.
 
 ## Inputs
@@ -67,6 +67,7 @@ The feature belongs under Reports because it is review-focused and analytical. I
 - Investment group filtering uses the selected group-tree nodes as the allowed set.
 - Free-text search matches against the investment name.
 - The current month is visually highlighted to anchor the user's attention in the present.
+- Missing prices remain unknown in estimated-value tooltips; known zero values remain distinguishable from missing prices.
 
 ## User Flow
 
@@ -98,6 +99,7 @@ The feature belongs under Reports because it is review-focused and analytical. I
 - The report starts with a loading placeholder until chart data is ready.
 - Users refine the view through radio toggles, a searchable filter box, and a group tree.
 - The output is visual-first and optimized for scanning holdings across time.
+- Position details are also announced when their chart columns receive keyboard focus.
 
 ## Documentation Boundary
 

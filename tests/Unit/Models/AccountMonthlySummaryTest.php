@@ -28,7 +28,7 @@ class AccountMonthlySummaryTest extends TestCase
      * equality.
      *
      * Builds the expected string via BigDecimal rather than number_format(): at
-     * calculateInvestmentValueFact()'s scale of 14 (quantity's scale 4 + price's scale 10,
+     * calculateInvestmentValueFact()'s scale of 20 (quantity's scale 10 + price's scale 10,
      * added by BigDecimal multiplication), number_format() itself round-trips through a
      * double and can render an exact value like 50 as "50.00000000000001" - reintroducing
      * the float-precision bug class this whole assertion exists to catch.

@@ -56,6 +56,7 @@ const routeMap = new Map([
   ['investment-price.list', 'investment-price/list'],
   ['report.schedules', 'reports/schedules'],
   ['reports.cashflow', 'reports/cashflow'],
+  ['reports.portfolio-valuation', 'reports/portfolio-valuation'],
     ['reports.advanced-reconcile', 'reports/advanced-reconcile'],
   ['reports.budgetchart', 'reports/budgetchart'],
   ['reports.transactions', 'reports/transactions'],

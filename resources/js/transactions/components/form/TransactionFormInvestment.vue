@@ -261,6 +261,7 @@
                     <MathInput
                       id="transaction_quantity"
                       v-model="form.config.quantity"
+                      decimal-string
                       class="form-control"
                       :disabled="!transactionTypeSettings.quantity"
                     ></MathInput>

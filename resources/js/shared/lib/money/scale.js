@@ -7,8 +7,10 @@
  * - AMOUNT (4): TransactionItem::amount, TransactionDetailStandard::amount_from/
  *   amount_to, TransactionDetailInvestment::commission/tax/dividend.
  * - PRICE (10): TransactionDetailInvestment::price, InvestmentPrice::price.
+ * - QUANTITY (10): TransactionDetailInvestment::quantity.
  */
 export const STORAGE_SCALE = {
   AMOUNT: 4,
   PRICE: 10,
+  QUANTITY: 10,
 };

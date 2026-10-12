@@ -81,6 +81,16 @@ The type also determines whether the transaction affects money amount, investmen
 
 High
 
+## Portfolio Analytics Classification Contract
+
+- A portfolio contribution is a recorded deposit into a selected account, or the selected-side receipt of a transfer from an account outside the selected scope. Its amount is positive and remains denominated in the receiving account's currency.
+- A portfolio withdrawal is a recorded withdrawal from a selected account, or the selected-side sending leg of a transfer to an account outside the selected scope. Its amount is negative and remains denominated in the sending account's currency.
+- A transfer with both accounts selected is internal and produces no external cashflow; a transfer with neither selected is outside the portfolio.
+- Only dated, non-scheduled transactions are included. Investment purchases, sales, income and fees are internal portfolio activity, not external contributions.
+- Cashflow events retain transaction and account IDs, date, source type, signed decimal-string amount and currency. Cross-currency conversion and aggregation are separate operations and must use dated FX evidence.
+- Add-shares and remove-shares are emitted as unclassified quantity-adjustment candidates. Existing records do not distinguish bonuses, splits, in-kind transfers or corrections, so analytics must not infer an action or count the quantity change as an external cashflow.
+- A return calculation that cannot safely account for an unclassified quantity adjustment must report an invalid/incomplete result with a reason, not a numeric return. Persisted action typing requires a separate schema and migration design.
+
 ## Assumptions
 
 - The type labels are user-facing representations of the enum values defined in the application.

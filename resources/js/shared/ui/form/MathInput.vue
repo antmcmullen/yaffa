@@ -10,6 +10,7 @@
 <script>
   import { evaluate } from 'mathjs';
   import Decimal from 'decimal.js';
+  import { evaluateDecimalExpression } from '@/shared/lib/money/evaluateDecimalExpression';
   import { __ } from '@/shared/lib/i18n';
   import * as toastHelpers from '@/shared/lib/toast';
 
@@ -26,6 +27,7 @@
     name: 'MathInput',
     props: {
       modelValue: [Number, String],
+      decimalString: { type: Boolean, default: false },
     },
     emits: ['update:modelValue'],
     methods: {
@@ -47,6 +49,12 @@
 
           // Remove any spaces
           input = input.replace(/\s/g, '');
+
+          if (this.decimalString) {
+            amount = evaluateDecimalExpression(input);
+            this.$emit('update:modelValue', amount);
+            return;
+          }
 
           // Evaluate the input
           amount = evaluate(input);

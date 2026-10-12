@@ -15,11 +15,11 @@ What's new here is a **second authentication mode** on top of the existing singl
 | `GET/POST/DELETE /api/v1/users/me/tokens*` (token management) | Allowed | **Denied (403)**, regardless of the token's abilities | `ApiTokenApiController::middleware()` closure — `abort(403)` if `currentAccessToken() instanceof PersonalAccessToken`. This is the one place in the app that discriminates on auth mode itself, not on abilities. Rationale: a bearer token, however narrowly scoped, must never be able to mint itself a broader-access replacement token. |
 | `GET /api/v1/users/me/two-factor` (`show`, read-only) | Allowed | **Allowed** — every token has baseline `read` | Only `auth:sanctum` + `verified`; no ability check needed since `read` is unconditional on every token. |
 | `POST /api/v1/users/me/two-factor/{enroll,confirm,disable,recovery-codes}` (4 mutating actions) | Allowed | **Denied (403)** unless the token was granted the `settings` ability | `TwoFactorApiController::middleware()` applies Sanctum's `abilities:settings` to these four actions — a no-op for session requests (`TransientToken::can()` always `true`). `disable`/`regenerateRecoveryCodes` additionally require `current_password`; `enroll`/`confirm` additionally reject the request outright (422) if 2FA is already enabled, closing a prior bug where either endpoint could be called on an already-enabled account without a password (see "Hardening" below). |
-| All other `/api/v1/*` endpoints (accounts, transactions, categories, payees, tags, investments, reports, imports, config, settings — ~24 controllers) | Allowed, full reach | **Denied without the matching ability.** | **Status: DONE.** See "Full Ability Enforcement — Implementation Plan" below for the per-controller mapping (the code pattern, first proven on `TwoFactorApiController`, was mechanically repeated across all remaining controllers) and `tests/Feature/API/ApiAbilityEnforcementTest.php` for the pinning tests. |
+| All other `/api/v1/*` endpoints (accounts, transactions, categories, payees, tags, investments, reports, imports, config, settings — ~25 controllers) | Allowed, full reach | **Denied without the matching ability.** | **Status: DONE.** See "Full Ability Enforcement — Implementation Plan" below for the per-controller mapping (the code pattern, first proven on `TwoFactorApiController`, was mechanically repeated across all remaining controllers) and `tests/Feature/API/ApiAbilityEnforcementTest.php` for the pinning tests. |
 
 ## Full Ability Enforcement — Implementation Plan (MVP requirement — implemented)
 
-**Status: done.** The ability picker shipped, abilities are validated and stored, and the mechanism proven correct and low-risk on `TwoFactorApiController` (see `architecture.md` Trust Boundaries) has been mechanically repeated across the other ~24 `API` controllers and is now pinned by `tests/Feature/API/ApiAbilityEnforcementTest.php`.
+**Status: done.** The ability picker shipped, abilities are validated and stored, and the mechanism proven correct and low-risk on `TwoFactorApiController` (see `architecture.md` Trust Boundaries) has been mechanically repeated across the other ~25 `API` controllers and is now pinned by `tests/Feature/API/ApiAbilityEnforcementTest.php`.
 
 ### Why this was required, not deferred
 
@@ -27,7 +27,7 @@ The original design (see SPECIFICATION.md history) treated this as a "Phase 2, s
 
 ### The mechanism (already proven, just needs repeating)
 
-**Updated for `release/v4`:** this section originally described a `HasMiddleware`-interface/static-`middleware()`-method pattern. The Laravel 13 upgrade (landed on this branch after this feature and the budget/schedule redesign were first built) replaced that across the codebase with PHP 8 class/method attributes — `Illuminate\Routing\Attributes\Controllers\Middleware` and `...\Authorize`. Verified current: 26 of the 27 controllers in `app/Http/Controllers/API/` now use the attribute form; only `ApiTokenApiController` still implements `HasMiddleware`/`middleware()`, because its auth-mode check is a closure (an `abort(403)` if the resolved token is a `PersonalAccessToken`), and the attribute form only accepts a named middleware string — it can't express an inline closure. `TwoFactorApiController` (the controller this section originally used as the worked example) now looks like this:
+**Updated for `release/v4`:** this section originally described a `HasMiddleware`-interface/static-`middleware()`-method pattern. The Laravel 13 upgrade (landed on this branch after this feature and the budget/schedule redesign were first built) replaced that across the codebase with PHP 8 class/method attributes — `Illuminate\Routing\Attributes\Controllers\Middleware` and `...\Authorize`. Verified current: 29 of the 30 controllers in `app/Http/Controllers/API/` now use the attribute form; only `ApiTokenApiController` still implements `HasMiddleware`/`middleware()`, because its auth-mode check is a closure (an `abort(403)` if the resolved token is a `PersonalAccessToken`), and the attribute form only accepts a named middleware string — it can't express an inline closure. `TwoFactorApiController` (the controller this section originally used as the worked example) now looks like this:
 
 ```php
 #[Middleware('auth:sanctum')]
@@ -53,6 +53,8 @@ Two rules, applied per controller method (derive exact method names from `routes
 2. **Every non-`GET` action → `abilities:write`** — *except* actions on the config/credential controllers and the two cross-controller "maintenance" routes, which require `abilities:settings` instead.
 
 This works because `read` is unconditionally present on every issued token (`ApiTokenRequest::prepareForValidation()`), so a `write`- or `settings`-scoped token always also holds `read` — single-ability gates are sufficient, no `CheckForAnyAbility`/`ability:` combinations needed anywhere in this rollout.
+
+The read-only `GET /api/v1/reports/portfolio-valuation` endpoint follows the `read` rule. `PortfolioValuationApiController::series` requires an explicit ordered account-ID list, a currency owned by the authenticated user, and 1–31 distinct `Y-m-d` dates; account IDs outside the user's scope return not found. A present empty `account_ids=` query value explicitly selects no accounts, while omitting `account_ids` is invalid. Its ability allow/deny coverage is included in `ApiAbilityEnforcementTest`.
 
 #### Controllers gated entirely by `settings` (all actions, including `GET`)
 
@@ -89,7 +91,7 @@ These two actions live on otherwise-`write`-default domain controllers but are o
 4. `AiUserSettingsApiController`.
 5. Everything else — the domain controllers, in any order, since they're already ownership-scoped and the only thing changing is which ability unlocks them.
 
-### Per-controller checklist (completed for all ~24 controllers)
+### Per-controller checklist (completed for all ~25 controllers)
 
 - [x] Read the controller's method list and cross-reference `routes/api.php` to build the exact `only: [...]` arrays for `read`/`write` (and `settings` where applicable).
 - [x] Add `use Illuminate\Routing\Controllers\Middleware;` if not already imported.
@@ -101,7 +103,7 @@ These two actions live on otherwise-`write`-default domain controllers but are o
 ### Non-goals for this rollout (scope was not expanded)
 
 - Per-resource abilities (`accounts:read`, `transactions:write`, etc.) were not introduced — that model was deliberately rejected in favor of the three-tier `read`/`write`/`settings` split (see SPECIFICATION.md "Ability Model"). Only the three existing enum values are used.
-- `ApiTokenAbility` itself, `ApiTokenRequest`, `ApiTokenManager.vue`, and the token-creation flow were not touched — those were already correct and complete; this rollout only added enforcement to the ~24 *other* controllers.
+- `ApiTokenAbility` itself, `ApiTokenRequest`, `ApiTokenManager.vue`, and the token-creation flow were not touched — those were already correct and complete; this rollout only added enforcement to the ~25 *other* controllers.
 - Existing Policies and `$user->accounts()`-style ownership scoping were not touched — ability checks are a layer on top of, not a replacement for, existing per-record authorization (see "Scope Derivation" below). A `write`-scoped token still can't touch another user's data; that boundary is unrelated to this work.
 
 ## Ability Scope Model (`App\Enums\ApiTokenAbility`)
@@ -139,5 +141,5 @@ Both are now covered by regression tests in `tests.md`.
 
 ## Risks
 
-- **Ability enforcement across the ~24 remaining controllers has shipped — no longer an open risk.** "Scoped token" is now a backend-enforced guarantee, not just a UI/UX promise: every `API` controller applies an `abilities:*` middleware gate matching `permissions.md`'s mapping. A `read`-only token is actually read-only everywhere, not only by convention on the two controllers that were enforced first.
+- **Ability enforcement across the ~25 remaining controllers has shipped — no longer an open risk.** "Scoped token" is now a backend-enforced guarantee, not just a UI/UX promise: every `API` controller applies an `abilities:*` middleware gate matching `permissions.md`'s mapping. A `read`-only token is actually read-only everywhere, not only by convention on the two controllers that were enforced first.
 - **Rollout narrowed already-issued tokens' effective reach with no re-issuance.** Every token created before the rollout now enforces exactly what its `abilities` column already said (which the user already selected at creation) — no new tokens needed to be minted, but a token a user was unknowingly relying on for broader access (because enforcement didn't exist yet) will now get 403s on endpoints outside its recorded abilities. This is the *intended* fix, not a regression, but it's a real behavior change on upgrade — worth a release note. See `variables.md` Pre-Go-Live Checklist.

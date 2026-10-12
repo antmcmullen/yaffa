@@ -211,6 +211,11 @@ Breadcrumbs::for('reports.cashflow', function (BreadcrumbTrail $trail) {
     $trail->push(__('Reports'));
     $trail->push(__('Cash Flow'), route('reports.cashflow'));
 });
+Breadcrumbs::for('reports.portfolio-valuation', function (BreadcrumbTrail $trail) {
+    $trail->parent('home');
+    $trail->push(__('Reports'));
+    $trail->push(__('Portfolio valuation'), route('reports.portfolio-valuation'));
+});
 Breadcrumbs::for('reports.budgetchart', function (BreadcrumbTrail $trail) {
     $trail->parent('home');
     $trail->push(__('Reports'));

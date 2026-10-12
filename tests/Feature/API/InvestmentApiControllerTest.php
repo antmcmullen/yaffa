@@ -211,6 +211,61 @@ class InvestmentApiControllerTest extends TestCase
         $this->assertEquals(120.00, $openPeriod['last_price']);
     }
 
+    public function test_timeline_keeps_missing_and_zero_prices_distinct(): void
+    {
+        Sanctum::actingAs($this->user, ['*']);
+
+        $unpricedInvestment = $this->createInvestmentForUser($this->user);
+        $zeroPriceInvestment = $this->createInvestmentForUser($this->user);
+        $account = AccountEntity::factory()
+            ->for($this->user)
+            ->for(
+                Account::factory()->create([
+                    'currency_id' => $unpricedInvestment->currency_id,
+                    'account_group_id' => AccountGroup::factory()->for($this->user)->create()->id,
+                ]),
+                'config'
+            )
+            ->create();
+        InvestmentPrice::factory()->for($zeroPriceInvestment)->create([
+            'date' => now()->toDateString(),
+            'price' => 0,
+        ]);
+
+        foreach ([$unpricedInvestment, $zeroPriceInvestment] as $investment) {
+            $config = TransactionDetailInvestment::create([
+                'account_id' => $account->id,
+                'investment_id' => $investment->id,
+                'price' => null,
+                'quantity' => 10,
+                'commission' => null,
+                'tax' => null,
+                'dividend' => null,
+            ]);
+
+            Transaction::factory()
+                ->for($this->user)
+                ->for($config, 'config')
+                ->create([
+                    'date' => '2024-01-05',
+                    'transaction_type' => 'buy',
+                    'schedule' => false,
+                ]);
+        }
+
+        $positions = $this->getJson(route('api.v1.investments.timeline'))
+            ->assertOk()
+            ->json();
+
+        $unpricedPosition = collect($positions)->firstWhere('id', $unpricedInvestment->id);
+        $zeroPricePosition = collect($positions)->firstWhere('id', $zeroPriceInvestment->id);
+
+        $this->assertNotNull($unpricedPosition);
+        $this->assertNull($unpricedPosition['last_price']);
+        $this->assertNotNull($zeroPricePosition);
+        $this->assertEquals(0, $zeroPricePosition['last_price']);
+    }
+
     public function test_price_history_returns_prices_without_investment_relation(): void
     {
         Sanctum::actingAs($this->user, ['*']);
@@ -256,6 +311,47 @@ class InvestmentApiControllerTest extends TestCase
         $this->assertSame('100.5000000000', $prices[0]['price']);
         $this->assertArrayNotHasKey('investment_id', $prices[0]);
         $this->assertArrayNotHasKey('investment', $prices[0]);
+    }
+
+    public function test_display_data_includes_schedules_as_projected_transactions(): void
+    {
+        Sanctum::actingAs($this->user, ['*']);
+
+        $investment = $this->createInvestmentForUser($this->user);
+        $scheduledTransaction = Transaction::factory()
+            ->for($this->user)
+            ->buy_schedule($this->user, ['investment_id' => $investment->id])
+            ->create();
+
+        $today = now()->startOfDay();
+        $scheduledTransaction->transactionSchedule->update([
+            'start_date' => $today->toDateString(),
+            'next_date' => $today->toDateString(),
+            'end_date' => $today->copy()->addDays(2)->toDateString(),
+            'frequency' => 'DAILY',
+            'interval' => 1,
+            'count' => null,
+        ]);
+
+        $response = $this->getJson(route('api.v1.investments.display-data', $investment));
+
+        $response->assertOk();
+        $scheduledInstances = collect($response->json('transactions'))
+            ->filter(fn (array $transaction): bool => $transaction['schedule'] === true)
+            ->values();
+
+        $this->assertCount(3, $scheduledInstances);
+        $this->assertSame(
+            [
+                $today->toDateString(),
+                $today->copy()->addDay()->toDateString(),
+                $today->copy()->addDays(2)->toDateString(),
+            ],
+            $scheduledInstances
+                ->pluck('date')
+                ->map(fn (string $date): string => mb_substr($date, 0, 10))
+                ->all(),
+        );
     }
 
     public function test_display_data_returns_null_latest_price_without_prices(): void

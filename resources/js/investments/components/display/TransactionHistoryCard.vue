@@ -34,7 +34,7 @@
   import 'datatables.net-bs5/css/dataTables.bootstrap5.min.css';
 
   import * as dataTableHelpers from '@/shared/lib/datatable';
-  import { __, toFormattedNumber } from '@/shared/lib/i18n';
+  import { __, toFormattedQuantity } from '@/shared/lib/i18n';
   import TransactionTable from '@/shared/ui/datatable/TransactionTable.vue';
 
   export default {
@@ -64,19 +64,35 @@
       },
       tableColumns() {
         const vm = this;
+        const typeColumn =
+          dataTableHelpers.transactionColumnDefinition.type(false);
+
         return [
           dataTableHelpers.transactionColumnDefinition.dateFromCustomField(
             'date',
             __('Date'),
             this.locale,
           ),
-          dataTableHelpers.transactionColumnDefinition.type(false),
+          {
+            ...typeColumn,
+            render(data, type, row) {
+              const transactionType = typeColumn.render(data, type, row);
+
+              if (type === 'display' && row.schedule) {
+                return `${transactionType} <span class="badge bg-info">${__(
+                  'Projected',
+                )}</span>`;
+              }
+
+              return transactionType;
+            },
+          },
           {
             data: 'config.quantity',
             title: __('Quantity'),
             render: function (data) {
               return data !== null && data !== ''
-                ? toFormattedNumber(data, vm.locale)
+                ? toFormattedQuantity(data, vm.locale)
                 : '';
             },
           },

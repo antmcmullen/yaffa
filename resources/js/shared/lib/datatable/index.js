@@ -3,7 +3,7 @@ import {
   __,
   toFormattedCurrency as toFormattedCurrencyHelper,
   toFormattedDate,
-  toFormattedNumber,
+  toFormattedQuantity,
 } from '@/shared/lib/i18n';
 import {
   escapeHtml,
@@ -410,13 +410,9 @@ export const transactionColumnDefinition = {
         return (
           typeConfig.label +
           ' ' +
-          toFormattedNumber(
+          toFormattedQuantity(
             row.config.quantity,
             window.YAFFA.userSettings.locale,
-            {
-              minimumFractionDigits: 4,
-              maximumFractionDigits: 4,
-            },
           ) +
           ' @ ' +
           toFormattedCurrency(

@@ -80,7 +80,7 @@ it('rejects an investment amount outside its column range or scale', function (s
 })->with([
     // Mirrors InvestmentPriceRequest's rule (investment_prices.price shares the column type).
     'price exceeding DECIMAL(20,10)' => ['buy', [...$buyConfig, 'price' => 10000000000], ['config.price']],
-    'quantity exceeding DECIMAL(14,4)' => ['buy', [...$buyConfig, 'quantity' => 10000000000], ['config.quantity']],
+    'quantity exceeding DECIMAL(20,10)' => ['buy', [...$buyConfig, 'quantity' => 10000000000], ['config.quantity']],
     'commission exceeding DECIMAL(14,4)' => ['buy', [...$buyConfig, 'commission' => 10000000000], ['config.commission']],
     'tax exceeding DECIMAL(14,4)' => ['buy', [...$buyConfig, 'tax' => 10000000000], ['config.tax']],
     'dividend exceeding DECIMAL(12,4)' => ['dividend', ['dividend' => 100000000], ['config.dividend']],
@@ -118,3 +118,38 @@ it('accepts a standard amount at exactly the DECIMAL(12,4) scale', function () {
         decimalValidationStandardPayload($this->user, '10.1234', '10.1234')
     )->assertOk();
 });
+
+it('retains ten quantity decimal places when created and edited', function (string $type, string $quantity) use ($buyConfig) {
+    $payload = decimalValidationInvestmentPayload($this->user, $type, [...$buyConfig, 'quantity' => $quantity]);
+    $response = $this->postJson(route('api.v1.transactions.store-investment'), $payload)
+        ->assertOk()
+        ->assertJsonPath('transaction.config.quantity', $quantity);
+
+    $id = $response->json('transaction.id');
+    $transaction = App\Models\Transaction::findOrFail($id);
+    expect((string) $transaction->config->quantity)->toBe($quantity);
+
+    $payload['action'] = 'edit';
+    $payload['config']['quantity'] = '2.1234567891';
+    $this->patchJson(route('api.v1.transactions.update-investment', $id), $payload)
+        ->assertOk()
+        ->assertJsonPath('transaction.config.quantity', '2.1234567891');
+
+    expect((string) $transaction->fresh()->config->quantity)->toBe('2.1234567891');
+})->with(['buy', 'sell', 'add_shares', 'remove_shares'])
+    ->with(['1.1234567891', '0.0000000001']);
+
+it('rejects excess quantity precision and non-positive values', function (string $type, string $quantity) use ($buyConfig) {
+    $this->postJson(
+        route('api.v1.transactions.store-investment'),
+        decimalValidationInvestmentPayload($this->user, $type, [...$buyConfig, 'quantity' => $quantity]),
+    )->assertUnprocessable()->assertJsonValidationErrors('config.quantity');
+})->with(['buy', 'sell', 'add_shares', 'remove_shares'])
+    ->with(['1.12345678901', '0.00000000001', '0', '-0.0000000001', '10000000000']);
+
+it('accepts share quantities at the full storage range', function (string $type) use ($buyConfig) {
+    $this->postJson(
+        route('api.v1.transactions.store-investment'),
+        decimalValidationInvestmentPayload($this->user, $type, [...$buyConfig, 'quantity' => '9999999999.9999999999']),
+    )->assertOk()->assertJsonPath('transaction.config.quantity', '9999999999.9999999999');
+})->with(['add_shares', 'remove_shares']);

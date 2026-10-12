@@ -17,7 +17,7 @@
           :class="{ 'text-muted fst-italic': investment.latest_price == null }"
         >
           <template v-if="investment.latest_price == null">
-            {{ __('Not available') }}
+            {{ __('Unknown (unpriced)') }}
           </template>
           <template v-else>
             {{
@@ -33,18 +33,14 @@
         <dt class="col-8">{{ __('Latest owned value') }}</dt>
         <dd
           class="col-4"
-          :class="{ 'text-muted fst-italic': investment.latest_price == null }"
+          :class="{ 'text-muted fst-italic': latestOwnedValue == null }"
         >
-          <template v-if="investment.latest_price == null">
-            {{ __('Not available') }}
+          <template v-if="latestOwnedValue == null">
+            {{ __('Unknown (unpriced)') }}
           </template>
           <template v-else>
             {{
-              toFormattedCurrency(
-                investment.current_quantity * investment.latest_price,
-                locale,
-                investment.currency,
-              )
+              toFormattedCurrency(latestOwnedValue, locale, investment.currency)
             }}
           </template>
         </dd>
@@ -57,8 +53,9 @@
   import {
     __,
     toFormattedCurrency,
-    toFormattedNumber,
+    toFormattedQuantity,
   } from '@/shared/lib/i18n';
+  import { getInvestmentValue } from '@/investments/lib/valuation';
 
   export default {
     name: 'CurrentAssetsCard',
@@ -73,16 +70,21 @@
         locale: window.YAFFA.userSettings.locale,
       };
     },
+    computed: {
+      latestOwnedValue() {
+        return getInvestmentValue(
+          this.investment.current_quantity,
+          this.investment.latest_price,
+        );
+      },
+    },
     methods: {
       toFormattedCurrency,
       formatQuantity(value) {
         if (value === 0) {
           return '0';
         }
-        return toFormattedNumber(value, this.locale, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 4,
-        });
+        return toFormattedQuantity(value, this.locale);
       },
       __,
     },

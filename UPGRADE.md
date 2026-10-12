@@ -58,6 +58,8 @@ Neither feature requires any action to upgrade, and neither is enabled by defaul
 
 ### API Response Precision (Decimal String Wire Format)
 
+Investment quantities now accept up to **10 decimal places**, rather than four. Run the normal migrations to widen `transaction_details_investment.quantity` to `DECIMAL(20,10)`; existing values and the ten-digit integer capacity are preserved. Rebuild frontend assets to enable precise quantity entry and display. Quantities continue to be decimal strings in transaction API responses: send them as strings too to avoid client-side floating-point rounding. Investment summary `quantity` and investment `current_quantity` now also return decimal strings. Rolling the migration back is blocked when stored quantities would lose precision.
+
 This release replaces float-based money/quantity arithmetic with exact decimal arithmetic (`brick/math`/`brick/money`) across transactions and investments, to eliminate float-precision drift in split/allocation totals, investment valuations, and monthly summary balances. As part of this, several `/api/v1/*` fields now serialize as **decimal strings instead of JSON numbers**:
 
 - `transaction_items[].amount`
