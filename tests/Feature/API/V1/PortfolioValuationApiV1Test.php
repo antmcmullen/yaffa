@@ -46,7 +46,10 @@ it('returns decimal-string valuation points for explicitly selected accounts and
         ->assertJsonPath('series.0.known_value', '1200.0000')
         ->assertJsonPath('series.0.total_value', '1200.0000')
         ->assertJsonPath('series.0.status', 'complete')
-        ->assertJsonPath('series.0.components.0.amount', '1200.0000');
+        ->assertJsonPath('series.0.components.0.amount', '1200.0000')
+        ->assertJsonPath('series.0.time_weighted_return.status', 'baseline')
+        ->assertJsonPath('series.0.time_weighted_return.cumulative_return', '0.0000000000')
+        ->assertJsonPath('series.1.time_weighted_return.period_return', '0.0000000000');
 });
 
 it('requires authentication to read valuation series', function (): void {

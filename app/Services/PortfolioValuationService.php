@@ -62,6 +62,29 @@ class PortfolioValuationService
         );
     }
 
+    public function convertCashflowAmount(
+        User $user,
+        string $amount,
+        Currency $fromCurrency,
+        Currency $toCurrency,
+        Carbon $date,
+    ): ?BigDecimal {
+        $currencies = Currency::query()
+            ->where('user_id', $user->id)
+            ->whereIn('id', [$fromCurrency->id, $toCurrency->id])
+            ->get();
+        if ($currencies->count() !== count(array_unique([$fromCurrency->id, $toCurrency->id]))) {
+            throw new ModelNotFoundException('A portfolio cashflow currency does not belong to this user.');
+        }
+
+        $fx = $this->resolveFxRate($user, $fromCurrency, $toCurrency, $date->copy()->startOfDay());
+        if ($fx === null) {
+            return null;
+        }
+
+        return BigDecimal::of($amount)->multipliedBy($fx['rate']);
+    }
+
     /**
      * @param EloquentCollection<int, AccountEntity> $accounts
      * @return array<string, mixed>

@@ -59,6 +59,17 @@ function formatCurrency(value) {
   return toFormattedCurrency(value, locale, baseCurrency);
 }
 
+function formatPercent(value) {
+  if (value === null) {
+    return __('Unavailable');
+  }
+
+  return new Intl.NumberFormat(locale, {
+    style: 'percent',
+    maximumFractionDigits: 2,
+  }).format(Number(value));
+}
+
 function initializeChart() {
   if (chart) {
     chart.dispose();
@@ -78,8 +89,7 @@ function initializeChart() {
     currency: baseCurrency.iso_code,
     currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: 0,
-    maximumFractionDigits:
-      baseCurrency.generic_decimal_precision ?? undefined,
+    maximumFractionDigits: baseCurrency.generic_decimal_precision ?? undefined,
   };
   chart.dateFormatter.intlLocales = locale;
   chart.dateFormatter.inputDateFormat = 'yyyy-MM-dd';
@@ -114,23 +124,36 @@ function initializeChart() {
 }
 
 function accountLabel(accountId) {
-  return accountNames.get(String(accountId)) ?? `${__('Account')} #${accountId}`;
+  return (
+    accountNames.get(String(accountId)) ?? `${__('Account')} #${accountId}`
+  );
 }
 
 function missingInputLabel(input) {
   const labels = {
     cashflow: __('Unresolved recorded cash flow'),
+    cashflow_fx: __('Missing dated exchange rate for a portfolio cash flow'),
     price: __('Missing investment price'),
     fx: __('Missing exchange rate'),
+    negative_pre_flow_value: __('Negative portfolio value before a cash flow'),
+    non_positive_opening_value: __(
+      'Return cannot be calculated from a non-positive opening value',
+    ),
+    unclassified_share_adjustment: __('Unclassified share adjustment'),
+    valuation: __('Missing portfolio valuation'),
   };
   const detail = labels[input.kind] ?? String(input.kind);
-  const account = accountLabel(input.account_id);
+  const account =
+    input.account_id === undefined
+      ? ''
+      : ` — ${accountLabel(input.account_id)}`;
   const investment =
     input.investment_id === undefined
       ? ''
       : `, ${__('Investment')} #${input.investment_id}`;
+  const date = input.date === undefined ? '' : ` (${input.date})`;
 
-  return `${detail} — ${account}${investment}`;
+  return `${detail}${account}${investment}${date}`;
 }
 
 function renderMissingInputs(container, inputs) {
@@ -160,6 +183,8 @@ function renderTable(points) {
     const statusCell = document.createElement('td');
     const knownCell = document.createElement('td');
     const totalCell = document.createElement('td');
+    const periodReturnCell = document.createElement('td');
+    const cumulativeReturnCell = document.createElement('td');
     const missingCell = document.createElement('td');
     const status = document.createElement('span');
 
@@ -187,8 +212,29 @@ function renderTable(points) {
         ? __('Unavailable')
         : formatCurrency(point.total_value);
 
-    renderMissingInputs(missingCell, point.missing_inputs);
-    row.append(dateCell, statusCell, knownCell, totalCell, missingCell);
+    periodReturnCell.className = 'text-end';
+    periodReturnCell.textContent = formatPercent(
+      point.time_weighted_return.period_return,
+    );
+
+    cumulativeReturnCell.className = 'text-end';
+    cumulativeReturnCell.textContent = formatPercent(
+      point.time_weighted_return.cumulative_return,
+    );
+
+    renderMissingInputs(missingCell, [
+      ...point.missing_inputs,
+      ...point.time_weighted_return.missing_inputs,
+    ]);
+    row.append(
+      dateCell,
+      statusCell,
+      knownCell,
+      totalCell,
+      periodReturnCell,
+      cumulativeReturnCell,
+      missingCell,
+    );
     tableRows.appendChild(row);
   });
 }
@@ -209,13 +255,13 @@ function renderLatestPoint(point) {
     point.status === 'complete' ? __('Complete') : __('Incomplete');
 
   document.getElementById('portfolioValuationLatestDate').textContent =
-    toFormattedDate(
-      point.date,
-      locale,
-      point.date,
-      true,
-      { year: 'numeric', month: 'long', day: 'numeric' },
-    );
+    toFormattedDate(point.date, locale, point.date, true, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  document.getElementById('portfolioValuationLatestReturn').textContent =
+    formatPercent(point.time_weighted_return.cumulative_return);
   document
     .getElementById('portfolioValuationLatest')
     .classList.remove('d-none');
@@ -231,8 +277,23 @@ function renderSeries(points, dates) {
         typeof point.known_value !== 'string' ||
         !Array.isArray(point.missing_inputs) ||
         !['complete', 'incomplete'].includes(point.status) ||
-        (point.total_value !== null &&
-          typeof point.total_value !== 'string'),
+        (point.total_value !== null && typeof point.total_value !== 'string') ||
+        !point.time_weighted_return ||
+        point.time_weighted_return.date !== point.date ||
+        !['baseline', 'complete', 'incomplete'].includes(
+          point.time_weighted_return.status,
+        ) ||
+        !Array.isArray(point.time_weighted_return.missing_inputs) ||
+        (point.time_weighted_return.period_return !== null &&
+          (typeof point.time_weighted_return.period_return !== 'string' ||
+            !Number.isFinite(
+              Number(point.time_weighted_return.period_return),
+            ))) ||
+        (point.time_weighted_return.cumulative_return !== null &&
+          (typeof point.time_weighted_return.cumulative_return !== 'string' ||
+            !Number.isFinite(
+              Number(point.time_weighted_return.cumulative_return),
+            ))),
     )
   ) {
     throw new Error(__('The portfolio valuation response was invalid.'));
@@ -240,8 +301,7 @@ function renderSeries(points, dates) {
 
   const chartData = points.map((point) => ({
     date: parseIsoDate(point.date),
-    totalValue:
-      point.total_value === null ? null : Number(point.total_value),
+    totalValue: point.total_value === null ? null : Number(point.total_value),
     knownValue: Number(point.known_value),
   }));
   if (
@@ -265,7 +325,9 @@ function renderSeries(points, dates) {
   renderTable(points);
 
   const hasIncompletePoints = points.some(
-    (point) => point.status === 'incomplete',
+    (point) =>
+      point.status === 'incomplete' ||
+      point.time_weighted_return.status === 'incomplete',
   );
   document
     .getElementById('portfolioValuationIncompleteNote')
@@ -303,9 +365,7 @@ async function loadValuation() {
     baseCurrency.id,
     dates,
   );
-  const url = `${window.route(
-    'api.v1.reports.portfolio-valuation',
-  )}?${query}`;
+  const url = `${window.route('api.v1.reports.portfolio-valuation')}?${query}`;
   const currentVersion = ++requestVersion;
 
   activeRequest?.abort();

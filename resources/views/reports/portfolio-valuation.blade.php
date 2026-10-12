@@ -78,9 +78,13 @@
                         <span id="portfolioValuationLatestStatus"></span>
                     </div>
                     <div class="small text-body-secondary" id="portfolioValuationLatestDate"></div>
+                    <div class="small mt-2">
+                        <span class="text-body-secondary">{{ __('Cumulative time-weighted return') }}:</span>
+                        <strong id="portfolioValuationLatestReturn"></strong>
+                    </div>
                 </div>
                 <div id="portfolioValuationIncompleteNote" class="alert alert-warning d-none" role="status">
-                    {{ __('Some dates are incomplete. The chart separates the known subtotal from the total, which is left unavailable when prices, exchange rates, or recorded cash-flow inputs are missing.') }}
+                    {{ __('Some valuation or return periods are incomplete. Missing prices, dated exchange rates, unresolved cash flows, or unclassified share adjustments prevent a reliable total or return.') }}
                 </div>
                 <div
                     id="portfolioValuationChart"
@@ -104,9 +108,11 @@
                     <thead>
                         <tr>
                             <th scope="col">{{ __('Date') }}</th>
-                            <th scope="col">{{ __('Status') }}</th>
+                            <th scope="col">{{ __('Valuation status') }}</th>
                             <th scope="col" class="text-end">{{ __('Known subtotal') }}</th>
                             <th scope="col" class="text-end">{{ __('Total value') }}</th>
+                            <th scope="col" class="text-end">{{ __('Period TWR') }}</th>
+                            <th scope="col" class="text-end">{{ __('Cumulative TWR') }}</th>
                             <th scope="col">{{ __('Missing inputs') }}</th>
                         </tr>
                     </thead>
