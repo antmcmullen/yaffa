@@ -4,7 +4,7 @@
       <div class="card-title">{{ __('Upcoming scheduled transactions') }}</div>
     </div>
     <div v-if="busy" class="card-body text-muted">
-      <i class="fa fa-spinner fa-spin me-1"></i>{{ __('Loading...') }}
+      <i class="fa fa-spinner fa-spin me-1"></i>{{ __('Loading') + '...' }}
     </div>
     <div v-else-if="failed" class="card-body text-danger">
       {{ __('Error while loading scheduled transactions') }}
@@ -26,7 +26,9 @@
             })
           "
         >
-          {{ formatDate(schedule.transaction_schedule.next_date) }}
+          {{
+            toFormattedDate(schedule.transaction_schedule.next_date, locale, '')
+          }}
         </a>
         <span>{{ formatAmount(schedule) }}</span>
       </li>
@@ -82,9 +84,7 @@
         });
     },
     methods: {
-      formatDate(date) {
-        return toFormattedDate(date, this.locale, '');
-      },
+      toFormattedDate,
       // The payee's side of the transaction, in the transaction's own currency
       formatAmount(schedule) {
         const amount =

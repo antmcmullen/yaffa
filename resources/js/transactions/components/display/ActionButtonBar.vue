@@ -10,9 +10,11 @@
       :disabled="skipInstanceButtonBusy"
       dusk="button-action-bar-skip"
       :title="__('Skip schedule instance')"
+      :aria-label="__('Skip schedule instance')"
       @click="skipInstance"
     >
-      <i class="fa me-1 fa-fast-forward"></i>{{ __('Skip instance') }}
+      <i class="fa me-md-1 fa-fast-forward"></i
+      ><span class="d-none d-md-inline">{{ __('Skip instance') }}</span>
     </button>
 
     <a
@@ -25,8 +27,10 @@
       dusk="button-action-bar-enter-instance"
       :href="getRoute('enter')"
       :title="__('Enter schedule instance')"
+      :aria-label="__('Enter schedule instance')"
     >
-      <i class="fa me-1 fa-pencil"></i>{{ __('Enter instance') }}
+      <i class="fa me-md-1 fa-calendar-plus"></i
+      ><span class="d-none d-md-inline">{{ __('Enter instance') }}</span>
     </a>
 
     <a
@@ -35,26 +39,57 @@
       dusk="button-action-bar-open"
       :href="getRoute('show')"
       :title="__('View details')"
+      :aria-label="__('View details')"
     >
-      <i class="fa me-1 fa-search"></i>{{ __('Open') }}
+      <i class="fa me-md-1 fa-search"></i
+      ><span class="d-none d-md-inline">{{ __('Open') }}</span>
     </a>
 
     <a
       v-if="controls.edit"
-      :href="getRoute('edit', { callback: 'show' })"
+      :href="getRoute('edit', { callback: editCallback })"
       class="btn btn-primary ms-2"
       :title="__('Edit')"
+      :aria-label="__('Edit')"
     >
-      <i class="fa me-1 fa-edit"></i>{{ __('Edit') }}
+      <i class="fa me-md-1 fa-edit"></i
+      ><span class="d-none d-md-inline">{{ __('Edit') }}</span>
     </a>
     <a
       v-if="controls.clone"
       :href="getRoute('clone')"
       class="btn btn-primary ms-2"
       :title="__('Clone')"
+      :aria-label="__('Clone')"
     >
-      <i class="fa me-1 fa-clone"></i>{{ __('Clone') }}
+      <i class="fa me-md-1 fa-clone"></i
+      ><span class="d-none d-md-inline">{{ __('Clone') }}</span>
     </a>
+
+    <a
+      v-if="controls.clone"
+      :href="getRoute('template')"
+      class="btn btn-primary ms-2"
+      :title="__('Save as template')"
+      :aria-label="__('Save as template')"
+    >
+      <i class="fa me-md-1 fa-bookmark"></i
+      ><span class="d-none d-md-inline">{{ __('Save as template') }}</span>
+    </a>
+
+    <button
+      v-if="controls.delete && !isModal"
+      class="btn btn-danger ms-2"
+      :disabled="deleteButtonBusy"
+      dusk="button-action-bar-delete"
+      type="button"
+      :title="__('Delete')"
+      :aria-label="__('Delete')"
+      @click="deleteTransaction"
+    >
+      <i class="fa me-md-1 fa-trash"></i
+      ><span class="d-none d-md-inline">{{ __('Delete') }}</span>
+    </button>
 
     <button
       v-if="isModal"
@@ -72,6 +107,9 @@
 <script>
   import { __ } from '@/shared/lib/i18n';
   import { processTransaction } from '@/shared/lib/helpers';
+  import { confirmDelete } from '@/shared/lib/confirm';
+  import { showErrorToast, showSuccessToast } from '@/shared/lib/toast';
+  import { storeToast } from '@/shared/lib/notifications/handleNotifications';
 
   export default {
     name: 'ActionButtonBar',
@@ -91,6 +129,16 @@
         type: Boolean,
         default: false,
       },
+      // Replaces the redirect after a successful delete
+      onDeleted: {
+        type: Function,
+        default: null,
+      },
+      // Where the edit form returns to after saving
+      editCallback: {
+        type: String,
+        default: 'show',
+      },
       transaction: {
         type: Object,
         default: () => ({}),
@@ -100,6 +148,7 @@
     data() {
       return {
         skipInstanceButtonBusy: false,
+        deleteButtonBusy: false,
       };
     },
     methods: {
@@ -110,6 +159,72 @@
           additionalParams,
         );
         return this.route('transaction.open', routeParams);
+      },
+      // The page we came from, unless it no longer makes sense (other origin, or a page of the
+      // deleted transaction itself, e.g. the edit form). Falls back to the transaction's account.
+      getReturnUrl() {
+        const config = this.transaction.config || {};
+        const accountId =
+          config.account_from_id || config.account_to_id || config.account_id;
+        const ownPath = '/transactions/' + this.transaction.id + '/';
+
+        if (
+          document.referrer.startsWith(window.location.origin) &&
+          !document.referrer.includes(ownPath)
+        ) {
+          return document.referrer;
+        }
+
+        return accountId
+          ? this.route('account-entity.show', { account_entity: accountId })
+          : this.route('home');
+      },
+      deleteTransaction() {
+        if (this.deleteButtonBusy) {
+          return;
+        }
+
+        confirmDelete(__('Are you sure you want to delete this transaction?'), {
+          confirmButtonText: __('Delete'),
+        }).then((result) => {
+          if (!result.isConfirmed) {
+            return;
+          }
+          this.deleteButtonBusy = true;
+          // Computed before the request: nothing changes it, and it keeps the redirect trivial
+          const returnUrl = this.getReturnUrl();
+
+          axios
+            .delete(
+              this.route('api.v1.transactions.destroy', {
+                transaction: this.transaction.id,
+              }),
+            )
+            .then(() => {
+              const message = __('Transaction deleted (#:transactionId)', {
+                transactionId: this.transaction.id,
+              });
+
+              if (this.onDeleted) {
+                showSuccessToast(message);
+                this.deleteButtonBusy = false;
+                this.onDeleted();
+                return;
+              }
+
+              storeToast('success', message);
+              location.href = returnUrl;
+            })
+            .catch((error) => {
+              this.deleteButtonBusy = false;
+              showErrorToast(
+                __('Error deleting transaction (#:transactionId): :error', {
+                  transactionId: this.transaction.id,
+                  error: error,
+                }),
+              );
+            });
+        });
       },
       skipInstance() {
         // Prevent double clicks

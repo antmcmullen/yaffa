@@ -5,18 +5,20 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Laravel\Sanctum\Sanctum;
+use Prism\Prism\Facades\Prism;
+use Prism\Prism\Testing\TextResponseFake;
 
 uses(RefreshDatabase::class);
 
 $validCreatePayload = [
     'provider' => 'openai',
-    'model' => 'gpt-4o-mini',
+    'model' => 'gpt-5.6-luna',
     'api_key' => 'sk-test-1234567890abcdefghij',
 ];
 
 $validUpdatePayload = [
     'provider' => 'openai',
-    'model' => 'gpt-4o',
+    'model' => 'gpt-5.6-terra',
 ];
 
 beforeEach(function () {
@@ -27,8 +29,8 @@ beforeEach(function () {
 function markGeminiProUnsupported(): void
 {
     config(['ai-documents.providers.gemini.models' => [
-        'gemini-2.5-flash' => ['vision' => true, 'supported' => true],
-        'gemini-2.5-pro' => ['vision' => true, 'supported' => false],
+        'gemini-3.5-flash-lite' => ['vision' => true, 'supported' => true],
+        'gemini-3.6-flash' => ['vision' => true, 'supported' => false],
     ]]);
 }
 
@@ -55,7 +57,7 @@ it('rejects creating a config with an unsupported model', function () use ($vali
     $this->postJson(route('api.v1.ai.config.store'), [
         ...$validCreatePayload,
         'provider' => 'gemini',
-        'model' => 'gemini-2.5-pro',
+        'model' => 'gemini-3.6-flash',
     ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['model']);
@@ -82,7 +84,7 @@ it('rejects an invalid update request', function (array $payload, string $field)
         ->assertUnprocessable()
         ->assertJsonValidationErrors([$field]);
 })->with([
-    'missing provider' => [['model' => 'gpt-4o-mini'], 'provider'],
+    'missing provider' => [['model' => 'gpt-5.6-luna'], 'provider'],
     'missing model' => [['provider' => 'openai'], 'model'],
     'short api_key' => [[...$validUpdatePayload, 'api_key' => 'short'], 'api_key'],
     'invalid vision_enabled' => [[...$validUpdatePayload, 'vision_enabled' => 'invalid'], 'vision_enabled'],
@@ -113,12 +115,12 @@ it('allows keeping an existing unsupported model on update', function () {
     $config = AiProviderConfig::factory()->create([
         'user_id' => $this->user->id,
         'provider' => 'gemini',
-        'model' => 'gemini-2.5-pro',
+        'model' => 'gemini-3.6-flash',
     ]);
 
     $this->patchJson(route('api.v1.ai.config.update', $config), [
         'provider' => 'gemini',
-        'model' => 'gemini-2.5-pro',
+        'model' => 'gemini-3.6-flash',
     ])->assertOk();
 });
 
@@ -128,17 +130,17 @@ it('rejects switching to an unsupported model on update', function () {
     $config = AiProviderConfig::factory()->create([
         'user_id' => $this->user->id,
         'provider' => 'gemini',
-        'model' => 'gemini-2.5-flash',
+        'model' => 'gemini-3.6-flash',
     ]);
 
     $this->patchJson(route('api.v1.ai.config.update', $config), [
         'provider' => 'gemini',
-        'model' => 'gemini-2.5-pro',
+        'model' => 'gemini-3.6-pro',
     ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['model']);
 
-    expect($config->refresh()->model)->toBe('gemini-2.5-flash');
+    expect($config->refresh()->model)->toBe('gemini-3.6-flash');
 });
 
 // ===== TEST CONNECTION (POST /api/v1/ai/test) =====
@@ -149,17 +151,18 @@ it('rejects a test connection request with a missing field', function (string $f
         ->assertJsonValidationErrors([$field]);
 })->with(['provider', 'model', 'api_key']);
 
-// The connection attempt itself fails (the key isn't real); only validation passing is asserted.
+// The provider call is faked, so no live AI endpoint is contacted.
 it('passes test connection validation with the existing placeholder', function () use ($validCreatePayload) {
+    Prism::fake([TextResponseFake::make()->withText('OK')]);
     AiProviderConfig::factory()->create(['user_id' => $this->user->id]);
 
-    $response = $this->postJson(route('api.v1.ai.config.test'), [...$validCreatePayload, 'api_key' => '__existing__']);
-
-    expect($response->status())->not->toBe(422);
+    $this->postJson(route('api.v1.ai.config.test'), [...$validCreatePayload, 'api_key' => '__existing__'])
+        ->assertOk();
 });
 
 it('passes test connection validation with a new api_key', function () use ($validCreatePayload) {
-    $response = $this->postJson(route('api.v1.ai.config.test'), $validCreatePayload);
+    Prism::fake([TextResponseFake::make()->withText('OK')]);
 
-    expect($response->status())->not->toBe(422);
+    $this->postJson(route('api.v1.ai.config.test'), $validCreatePayload)
+        ->assertOk();
 });

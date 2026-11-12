@@ -15,6 +15,13 @@
     ></payee-form>
 
     <form accept-charset="UTF-8" autocomplete="off" @submit.prevent="onSubmit">
+      <template-fields
+        v-if="isTemplate"
+        v-model:name="templateName"
+        v-model:is-featured="templateIsFeatured"
+        :notices="templateInfo?.notices || []"
+        :errors="form.errors"
+      ></template-fields>
       <div class="row">
         <div class="col-md-4">
           <div class="card mb-3">
@@ -117,6 +124,7 @@
             <div class="card-body">
               <div class="row">
                 <div
+                  v-if="!isTemplate"
                   class="col-4 col-sm-2 col-md-4 col-lg-2 mb-3 mb-sm-0 mb-md-3 mb-lg-0 d-flex justify-content-center"
                 >
                   <input
@@ -137,6 +145,7 @@
                   </label>
                 </div>
                 <div
+                  v-if="!isTemplate"
                   :class="[
                     action === 'enter'
                       ? 'col-8 col-sm-2 col-md-4 col-lg-2'
@@ -167,7 +176,6 @@
                       id="checkbox-standard-catch-up-schedule"
                       v-model="form.catch_up_schedule"
                       class="form-check-input"
-                      dusk="checkbox-standard-catch-up-schedule"
                       type="checkbox"
                       value="1"
                     />
@@ -258,6 +266,20 @@
               </div>
             </div>
             <div class="card-body">
+              <div v-if="selectDataError" class="alert alert-danger mb-3">
+                {{
+                  __(
+                    'Could not load the account, payee, category and tag lists.',
+                  )
+                }}
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-danger ms-2"
+                  @click="retrySelectData"
+                >
+                  {{ __('Retry') }}
+                </button>
+              </div>
               <div class="row mb-3">
                 <div
                   class="col-12 mb-3"
@@ -307,6 +329,26 @@
                     >
                       <span class="fa fa-fw fa-plus"></span>
                     </button>
+                  </div>
+                </div>
+                <div v-if="reactivated.length > 0" class="col-12 mt-2">
+                  <div class="form-check">
+                    <input
+                      id="checkbox-deactivate-reactivated"
+                      v-model="deactivateAfterSave"
+                      class="form-check-input"
+                      type="checkbox"
+                    />
+                    <label
+                      class="form-check-label"
+                      for="checkbox-deactivate-reactivated"
+                    >
+                      {{
+                        reactivated.length === 1
+                          ? __('One-time use: keep item inactive')
+                          : __('One-time use: keep items inactive')
+                      }}
+                    </label>
                   </div>
                 </div>
               </div>
@@ -442,25 +484,94 @@
           </div>
         </div>
         <div class="col-md-8">
-          <!-- AI Recommendations Info Banner -->
+          <!-- AI recommendations and related documents/transactions -->
           <div
-            v-if="hasAiRecommendations"
-            class="alert alert-primary mb-3"
+            v-if="showAiBanner || hasDuplicateMatches"
+            class="alert mb-3"
+            :class="
+              hasDuplicateMatches
+                ? 'alert-warning'
+                : 'alert-primary alert-dismissible'
+            "
             role="alert"
+            :dusk="hasDuplicateMatches ? 'duplicate-warning' : null"
           >
-            <div class="d-flex align-items-center">
-              <i class="fa fa-robot fa-2x me-3"></i>
-              <div>
-                <h6 class="alert-heading mb-2">
-                  ✨ {{ __('AI-Assisted Transaction') }}
-                </h6>
-                <p class="mb-1 small">
-                  {{
-                    __(
-                      'Review the suggested categories below. Items show the extracted description and AI recommendations with confidence scoring.',
-                    )
-                  }}
-                </p>
+            <button
+              v-if="!hasDuplicateMatches"
+              type="button"
+              class="btn-close"
+              :aria-label="__('Close')"
+              @click="aiBannerDismissed = true"
+            ></button>
+            <div v-if="showAiBanner">
+              <h6 class="alert-heading mb-2">
+                ✨ {{ __('AI-Assisted Transaction') }}
+              </h6>
+              <p class="mb-1 small">
+                {{
+                  __(
+                    'Review the suggested categories below. Items show the extracted description and AI recommendations with confidence scoring.',
+                  )
+                }}
+              </p>
+            </div>
+            <div v-if="hasDuplicateMatches" :class="{ 'mt-3': showAiBanner }">
+              <h6 class="alert-heading">
+                <i class="fa fa-triangle-exclamation me-1"></i>
+                {{
+                  duplicateMatches.transactions.length
+                    ? __('This purchase may already be recorded')
+                    : __('Another document may describe this purchase')
+                }}
+              </h6>
+              <p class="small mb-2">
+                {{
+                  __(
+                    'Repeated purchases are normal, so you can still save this transaction.',
+                  )
+                }}
+              </p>
+              <ul
+                v-if="duplicateMatches.transactions.length"
+                class="small mb-2"
+              >
+                <li
+                  v-for="match in duplicateMatches.transactions"
+                  :key="match.id"
+                >
+                  {{ __('Transaction on :date', { date: match.date }) }}
+                  <a :href="match.url" target="_blank" rel="noopener">
+                    #{{ match.id }}
+                  </a>
+                </li>
+              </ul>
+              <div
+                v-for="document in duplicateMatches.documents"
+                :key="document.id"
+                class="form-check small"
+              >
+                <input
+                  :id="'close-ai-document-' + document.id"
+                  class="form-check-input"
+                  type="checkbox"
+                  :checked="form.close_ai_document_id === document.id"
+                  :disabled="!canCloseDocuments"
+                  @change="
+                    toggleCloseDocument(document.id, $event.target.checked)
+                  "
+                />
+                <label
+                  class="form-check-label"
+                  :for="'close-ai-document-' + document.id"
+                >
+                  {{ __('Document:') }}
+                  <a :href="document.url" target="_blank" rel="noopener">
+                    {{ document.title }}
+                  </a>
+                  <span v-if="canCloseDocuments">
+                    — {{ __('close this document when saving') }}
+                  </span>
+                </label>
               </div>
             </div>
           </div>
@@ -471,11 +582,13 @@
             :payee="payeeId"
             :transaction-type="form.transaction_type"
             :amount-from="form.config.amount_from"
+            :amount-precision="amountPrecision"
+            :default-category-id="payeeCategory.id"
             :remaining-amount="
               remainingAmountNotAllocated || remainingAmountToPayeeDefault || 0
             "
             :enabled="!transactionTypeIsTransfer"
-            :dropdown-parent-selector="dropdownParentSelector"
+            :swal-target-selector="swalTargetSelector"
             @add-transaction-item="addTransactionItem"
             @remove-transaction-item="removeTransactionItem"
             @update-transaction-item="updateTransactionItem"
@@ -488,7 +601,7 @@
         <div class="card-body">
           <div class="row justify-content-end">
             <div
-              v-if="!fromModal"
+              v-if="!fromModal && !isTemplate"
               class="d-none d-lg-block col-lg-12 col-xl-9 mb-3 mb-lg-3 mb-xl-0"
               dusk="action-after-save-desktop-button-group"
             >
@@ -514,7 +627,7 @@
               </div>
             </div>
             <div
-              v-if="!fromModal"
+              v-if="!fromModal && !isTemplate"
               class="col-12 col-sm-8 d-block d-lg-none mb-3 mb-sm-0"
             >
               <label class="form-label" for="callback-selector-mobile-standard">
@@ -578,7 +691,21 @@
     toFormattedCurrency,
   } from '@/shared/lib/i18n';
   import { markRaw } from 'vue';
-  import { createRemoteSelect, setSelected } from '@/shared/lib/tom-select';
+  import {
+    createLocalSelect,
+    lockSelect,
+    unlockSelect,
+    setSelected,
+  } from '@/shared/lib/tom-select';
+  import {
+    applySavedTransaction,
+    loadSelectData,
+    rankByUsage,
+    searchEntities,
+    standardUsage,
+    upsertEntity,
+  } from '@/shared/lib/select-data';
+  import * as toastHelpers from '@/shared/lib/toast';
 
   import { confirmAction } from '@/shared/lib/confirm';
 
@@ -586,6 +713,8 @@
   import MathInput from '@/shared/ui/form/MathInput.vue';
 
   import Form from 'vform';
+  import templateForm from '@/transaction-templates/templateForm';
+  import TemplateFields from '@/transaction-templates/components/TemplateFields.vue';
   import {
     Button as SubmitButton,
     AlertErrors,
@@ -598,6 +727,7 @@
 
   export default {
     components: {
+      TemplateFields,
       TransactionItemContainer,
       TransactionSchedule,
       PayeeForm,
@@ -605,6 +735,8 @@
       AlertErrors,
       MathInput,
     },
+
+    mixins: [templateForm],
 
     props: {
       action: String,
@@ -634,7 +766,7 @@
         type: Number,
         default: null,
       },
-      dropdownParentSelector: {
+      swalTargetSelector: {
         type: String,
         default: 'body',
       },
@@ -684,12 +816,24 @@
         remaining_payee_default_amount: 0,
         remaining_payee_default_category_id: null,
         ai_document_id: null,
+        transaction_template_id: null,
+        close_ai_document_id: null,
       });
+
+      // Recorded transactions and open documents matching the purchase being entered
+      data.duplicateMatches = { transactions: [], documents: [] };
+      data.aiBannerDismissed = false;
+      data.duplicateCheckTimer = null;
+      data.duplicateCheckRequestId = 0;
 
       // Id counter for items
       data.itemCounter = 0;
 
-      data.callback = this.initialCallback;
+      // Finalizing an AI document: default to returning to the document list
+      data.callback =
+        this.action === 'finalize' && this.aiDocumentId !== null
+          ? 'returnToAiDocuments'
+          : this.initialCallback;
 
       // Various callback options
       data.callbackOptions = [
@@ -719,6 +863,12 @@
           enabled: false,
         },
         {
+          value: 'returnToAiDocuments',
+          label: __('callback.returnToAiDocuments'),
+          // Only when finalizing an AI document
+          enabled: this.action === 'finalize' && this.aiDocumentId !== null,
+        },
+        {
           value: 'returnToDashboard',
           label: __('callback.returnToDashboard'),
           enabled: true,
@@ -730,6 +880,11 @@
         },
       ];
 
+      // Entities the user reactivated from the dropdown for this transaction, and whether to restore them on save
+      data.reactivated = [];
+      data.deactivateAfterSave = true;
+      data.selectDataError = false;
+
       // Some other settings
       data.locale = window.YAFFA.userSettings.locale;
       data.initializingTransaction = false;
@@ -738,6 +893,58 @@
     },
 
     computed: {
+      // What identifies the purchase for the duplicate check, or null while it is incomplete or not checkable
+      // (templates, schedules, transfers)
+      duplicateCheckPayload() {
+        const { transaction_type: type, config, date, schedule } = this.form;
+        const amount = parseFloat(config.amount_from);
+
+        if (
+          this.isTemplate ||
+          schedule ||
+          !['withdrawal', 'deposit'].includes(type) ||
+          !config.account_from_id ||
+          !config.account_to_id ||
+          !date ||
+          !(amount > 0)
+        ) {
+          return null;
+        }
+
+        const isWithdrawal = type === 'withdrawal';
+
+        return {
+          config_type: 'standard',
+          transaction_type: type,
+          account_id: isWithdrawal
+            ? config.account_from_id
+            : config.account_to_id,
+          payee_id: isWithdrawal
+            ? config.account_to_id
+            : config.account_from_id,
+          date,
+          amount: config.amount_from,
+          exclude_transaction_id:
+            this.action === 'edit' ? this.form.id || null : null,
+        };
+      },
+
+      showAiBanner() {
+        return this.hasAiRecommendations && !this.aiBannerDismissed;
+      },
+
+      hasDuplicateMatches() {
+        return (
+          this.duplicateMatches.transactions.length > 0 ||
+          this.duplicateMatches.documents.length > 0
+        );
+      },
+
+      // Closing a document is done by saving a new transaction; editing one cannot do it
+      canCloseDocuments() {
+        return this.action !== 'edit';
+      },
+
       // Account TO and FROM labels based on transaction type
       accountFromFieldLabel() {
         return ['withdrawal', 'transfer'].includes(this.form.transaction_type)
@@ -772,6 +979,27 @@
        *
        * @returns {string} The currency symbol for the relevant account or an empty string.
        */
+      // Decimal places of the transaction amount's currency; when the currency has no
+      // configured precision, use the same default Intl applies when formatting it.
+      amountPrecision() {
+        const currency =
+          this.form.transaction_type === 'deposit'
+            ? this.to.account_currency
+            : this.from.account_currency;
+
+        if (!currency) {
+          return 2;
+        }
+
+        return (
+          currency.generic_decimal_precision ??
+          new Intl.NumberFormat(this.locale, {
+            style: 'currency',
+            currency: currency.iso_code,
+          }).resolvedOptions().maximumFractionDigits
+        );
+      },
+
       ammountFromCurrencyLabel() {
         if (['withdrawal', 'transfer'].includes(this.form.transaction_type)) {
           if (this.from.account_currency) {
@@ -933,7 +1161,7 @@
 
       // Do we allow the user to edit the base settings?
       isBaseSettingsEditsAllowed() {
-        return ['create', 'finalize'].includes(this.action);
+        return ['create', 'finalize', 'template'].includes(this.action);
       },
 
       // Check if any items have AI recommendations
@@ -946,6 +1174,11 @@
     },
 
     watch: {
+      // Re-run the duplicate check whenever the purchase's identifying fields change
+      duplicateCheckPayload(payload) {
+        this.scheduleDuplicateCheck(payload);
+      },
+
       remainingAmountToPayeeDefault(newAmount) {
         this.form.remaining_payee_default_amount = newAmount;
       },
@@ -994,7 +1227,11 @@
         // config.account_from_id/account_to_id before the calls above
         // asynchronously repopulate them, so this must wait for both to settle
         // rather than snapshotting right after initializeTransaction().
-        Promise.all([accountFromReady, accountToReady]).then(() => {
+        Promise.all([
+          this.selectDataReady,
+          accountFromReady,
+          accountToReady,
+        ]).then(() => {
           this.$nextTick(() => this.markFormClean());
         });
       },
@@ -1016,6 +1253,17 @@
     created() {
       // Copy values of existing transaction into component form data
       this.initializeTransaction();
+
+      // The initial type may already be transfer (clone, edit, URL preset), which
+      // onChangeTransactionType() never sees
+      this.callbackOptions.find(
+        (x) => x.value === 'returnToSecondaryAccount',
+      ).enabled = this.form.transaction_type === 'transfer';
+
+      // The shared reference data behind the account/payee selects (not reactive: it is read on demand)
+      this.selectData = null;
+      this.pendingActivations = [];
+      this.loadReferenceData();
     },
 
     mounted() {
@@ -1039,14 +1287,19 @@
       // Initialize tooltips
       initializeBootstrapTooltips(this.$el);
 
-      // Snapshot the settled post-load state (both account details loaded and
-      // synced into form.config) as the isDirty() baseline.
-      Promise.all([accountFromReady, accountToReady]).then(() => {
+      // Snapshot the settled post-load state (reference data and both account details
+      // loaded and synced into form.config) as the isDirty() baseline.
+      Promise.all([
+        this.selectDataReady,
+        accountFromReady,
+        accountToReady,
+      ]).then(() => {
         this.$nextTick(() => this.markFormClean());
       });
     },
 
     beforeUnmount() {
+      clearTimeout(this.duplicateCheckTimer);
       this.accountSelects.from?.destroy();
       this.accountSelects.to?.destroy();
     },
@@ -1054,6 +1307,59 @@
     methods: {
       getCurrencySymbol,
       toFormattedCurrency,
+
+      // Debounced, and only the latest response is used. The check is informational, so a failure is ignored.
+      scheduleDuplicateCheck(payload) {
+        clearTimeout(this.duplicateCheckTimer);
+        const requestId = ++this.duplicateCheckRequestId;
+
+        if (!payload) {
+          this.applyDuplicateMatches({ transactions: [], documents: [] });
+          return;
+        }
+
+        this.duplicateCheckTimer = setTimeout(() => {
+          window.axios
+            .post(window.route('api.v1.transactions.duplicate-check'), payload)
+            .then((response) => {
+              if (requestId === this.duplicateCheckRequestId) {
+                this.applyDuplicateMatches(response.data);
+              }
+            })
+            .catch(() => {
+              if (requestId === this.duplicateCheckRequestId) {
+                this.applyDuplicateMatches({ transactions: [], documents: [] });
+              }
+            });
+        }, 500);
+      },
+
+      applyDuplicateMatches(matches) {
+        // The document being finalized is not a duplicate of its own transaction
+        this.duplicateMatches = {
+          ...matches,
+          documents: matches.documents.filter(
+            (d) => d.id !== this.aiDocumentId,
+          ),
+        };
+        matches = this.duplicateMatches;
+
+        // A document that no longer matches cannot be closed by this transaction
+        if (
+          this.form.close_ai_document_id !== null &&
+          !matches.documents.some(
+            (d) => d.id === this.form.close_ai_document_id,
+          )
+        ) {
+          this.form.close_ai_document_id = null;
+        }
+      },
+
+      // One document can be closed per saved transaction
+      toggleCloseDocument(documentId, checked) {
+        this.form.close_ai_document_id = checked ? documentId : null;
+      },
+
       initializeTransaction() {
         this.initializingTransaction = true;
 
@@ -1073,8 +1379,19 @@
           this.form.reconciled = this.transaction.reconciled ?? false;
 
           // Copy configuration
-          this.form.config.amount_from = this.transaction.config.amount_from;
-          this.form.config.amount_to = this.transaction.config.amount_to;
+          // Amounts may arrive as fixed-scale decimal strings (e.g. "12.5000" from
+          // MoneyCast or an AI draft) - Number() drops the trailing zeros, the same
+          // way MathInput normalizes what the user types.
+          const toAmount = (value) =>
+            value === null || value === undefined || value === ''
+              ? value
+              : Number(value);
+          this.form.config.amount_from = toAmount(
+            this.transaction.config.amount_from,
+          );
+          this.form.config.amount_to = toAmount(
+            this.transaction.config.amount_to,
+          );
           this.form.config.account_from_id =
             this.transaction.config.account_from_id;
           this.form.config.account_to_id =
@@ -1193,6 +1510,7 @@
 
         // Assign AI document ID passed to the form for future reference when saving the transaction
         this.form.ai_document_id = this.aiDocumentId;
+        this.form.transaction_template_id = this.transactionTemplateId;
 
         // Set form action
         this.form.action = this.action;
@@ -1220,7 +1538,9 @@
         const item = { ...rawItem };
 
         item.id = this.itemCounter++;
-        item.amount = Number(item.amount);
+        // A template item may have no amount yet
+        item.amount =
+          this.draftDecimal(item.amount) === null ? null : Number(item.amount);
         item.learnRecommendation = true;
 
         item.category_full_name =
@@ -1250,13 +1570,19 @@
           return false;
         }
 
+        // Nothing to lose, so no need to bother the user
+        if (!this.typeChangeLosesData(newState)) {
+          this.onChangeTransactionType(newState, false);
+          return;
+        }
+
         // Confirm transaction type change with user
         const target = event.currentTarget;
         confirmAction(
           __(
             'Are you sure, you want to change the transaction type? Some data might get lost.',
           ),
-          { icon: 'warning', target: this.dropdownParentSelector },
+          { icon: 'warning', target: this.swalTargetSelector },
         ).then((result) => {
           if (result.isConfirmed) {
             this.onChangeTransactionType(newState, false);
@@ -1264,6 +1590,20 @@
             target.blur();
           }
         });
+      },
+
+      // Mirrors what onChangeTransactionType() resets: a selected account/payee on a side
+      // whose kind changes, and all items when moving to transfer
+      typeChangeLosesData(newState) {
+        const sideLost = (side) =>
+          this.getAccountType(side) !== this.getAccountType(side, newState) &&
+          !!this.form.config['account_' + side + '_id'];
+
+        return (
+          sideLost('from') ||
+          sideLost('to') ||
+          (newState === 'transfer' && this.form.items.length > 0)
+        );
       },
 
       /**
@@ -1346,24 +1686,16 @@
       },
 
       // Check if TO or FROM is account or payee
-      getAccountType(type) {
-        if (this.form.transaction_type === 'withdrawal') {
+      getAccountType(type, transactionType = this.form.transaction_type) {
+        if (transactionType === 'withdrawal') {
           return type === 'from' ? 'account' : 'payee';
         }
-        if (this.form.transaction_type === 'deposit') {
+        if (transactionType === 'deposit') {
           return type === 'from' ? 'payee' : 'account';
         }
 
         // Transfer
         return 'account';
-      },
-
-      // Get url to payee or account list, based on source or target type
-      getAccountApiUrl(type) {
-        const accountUrl = '/api/v1/accounts';
-        const payeeUrl = '/api/v1/payees';
-
-        return this.getAccountType(type) === 'account' ? accountUrl : payeeUrl;
       },
 
       // Account has been removed, its properties need to be removed
@@ -1385,33 +1717,122 @@
         return __('Select payee');
       },
 
-      // (Re)create the account/payee select of one side: its endpoint, placeholder and
-      // params depend on the transaction type, so a type change recreates it (empty)
-      initializeAccountSelect(type) {
+      // Load the shared reference data (accounts, payees, categories, usage). Everything the selects show,
+      // and the currency/default category looked up on selection, comes from it - no per-click requests.
+      loadReferenceData() {
+        this.selectDataError = false;
+        this.selectDataReady = loadSelectData().then(
+          (data) => {
+            this.selectData = data;
+            ['from', 'to'].forEach((side) => {
+              const select = this.accountSelects?.[side];
+              if (select?.isLocked) {
+                unlockSelect(select, this.getPlaceholder(side));
+              }
+            });
+          },
+          (error) => {
+            this.selectDataError = true;
+            throw error;
+          },
+        );
+        // The rejection is surfaced through selectDataError; callers that chain on it handle it themselves
+        this.selectDataReady.catch(() => {});
+
+        return this.selectDataReady;
+      },
+
+      // Retry a failed load, then apply the presets that were waiting for it
+      retrySelectData() {
+        this.loadReferenceData().then(() => {
+          const config = this.transaction?.config;
+          Promise.all([
+            this.getDefaultAccountDetails(config?.account_from_id, 'from'),
+            this.getDefaultAccountDetails(config?.account_to_id, 'to'),
+          ]).then(() => {
+            this.$nextTick(() => this.markFormClean());
+          });
+        });
+      },
+
+      // Accounts or payees, depending on what this side is for the current transaction type
+      getEntities(type) {
+        return this.getAccountType(type) === 'account'
+          ? this.selectData.accounts
+          : this.selectData.payees;
+      },
+
+      findEntity(type, id) {
+        return this.getEntities(type).find((e) => e.id === Number(id));
+      },
+
+      toSelectItem(entity) {
+        return {
+          id: entity.id,
+          text: entity.name,
+          alias: entity.alias,
+          active: entity.active,
+        };
+      },
+
+      // Everything selectable on one side, except what the other side already holds
+      selectableEntities(type) {
         const otherType = type === 'from' ? 'to' : 'from';
+        const otherId = Number(
+          this.form.config['account_' + otherType + '_id'],
+        );
 
+        return this.getEntities(type).filter((e) => e.id !== otherId);
+      },
+
+      // Most used / recent / alphabetical suggestions for one side. A payee is ranked by how often it was
+      // used with the account chosen on the other side.
+      suggestionGroups(type) {
+        if (!this.selectData) {
+          return [];
+        }
+
+        const usage = standardUsage(this.selectData.usage, {
+          transactionType: this.form.transaction_type,
+          side: type,
+          anchorId:
+            this.getAccountType(type) === 'payee' ? this.accountId : null,
+        });
+        const { mostUsed, recent, fill } = rankByUsage(
+          this.selectableEntities(type).filter((e) => e.active),
+          usage,
+        );
+
+        return [
+          { id: 'most-used', label: __('Most used'), items: mostUsed },
+          { id: 'recent', label: __('Recent'), items: recent },
+          { id: 'other', label: __('Other'), items: fill },
+        ].map((group) => ({
+          ...group,
+          items: group.items.map((e) => this.toSelectItem(e)),
+        }));
+      },
+
+      searchEntities(type, term) {
+        if (!this.selectData) {
+          return [];
+        }
+
+        return searchEntities(this.selectableEntities(type), term)
+          .slice(0, 50)
+          .map((e) => ({ ...this.toSelectItem(e), matchedVia: e.matchedVia }));
+      },
+
+      // (Re)create the account/payee select of one side: what it lists depends on the transaction
+      // type, so a type change recreates it (empty)
+      initializeAccountSelect(type) {
         this.accountSelects[type]?.destroy();
-        this.accountSelects[type] = markRaw(
-          createRemoteSelect(document.getElementById('account_' + type), {
-            url: this.getAccountApiUrl(type),
-            params: (term) => ({
-              q: term || undefined,
-              transaction_type: this.form.transaction_type,
-              account_type: type,
-              account_entity_id: this.accountId,
-            }),
-            mapResult: (account) => ({ id: account.id, text: account.name }),
-            // Exclude account that is selected in other account select
-            filterResults: (results) => {
-              const otherAccountId =
-                this.form.config['account_' + otherType + '_id'];
-
-              return otherAccountId
-                ? results.filter((item) => item.id != otherAccountId)
-                : results;
-            },
+        const select = markRaw(
+          createLocalSelect(document.getElementById('account_' + type), {
+            suggestions: () => this.suggestionGroups(type),
+            search: (term) => this.searchEntities(type, term),
             placeholder: this.getPlaceholder(type),
-            onSelect: (item) => this.onAccountSelected(type, item.id),
+            onSelect: (item) => this.onAccountPicked(type, item),
             onClear: () => {
               this.resetAccount(type);
               if (this.getAccountType(type) === 'payee') {
@@ -1420,24 +1841,73 @@
             },
           }),
         );
+        this.accountSelects[type] = select;
+
+        if (!this.selectData) {
+          lockSelect(select, __('Loading…'));
+        }
       },
 
-      // Store the selected account/payee and load the details that depend on it. Returns the
-      // details request, so presets can wait for it before the form is treated as loaded.
-      onAccountSelected(type, id) {
-        this.form.config['account_' + type + '_id'] = Number(id);
+      // A user's pick from the dropdown: an inactive entity is reactivated first
+      onAccountPicked(type, item) {
+        const id = Number(item.id);
+        this.onAccountSelected(type, id);
 
-        if (this.getAccountType(type) === 'account') {
-          return window.axios.get('/api/v1/accounts/' + id).then(({ data }) => {
-            this[type].account_currency = data.config.currency;
-          });
+        if (item.active !== false) {
+          return;
         }
 
-        return window.axios.get('/api/v1/payees/' + id).then(({ data }) => {
-          if (data.config.category) {
-            this.payeeCategory.id = data.config.category.id;
-            this.payeeCategory.text = data.config.category.full_name;
+        const kind =
+          this.getAccountType(type) === 'account' ? 'accounts' : 'payees';
+        // Tracked, so onSubmit() can wait for it: restoreReactivated() must see this entity
+        const activation = window.axios
+          .patch(
+            window.route('api.v1.account-entities.patch-active', {
+              accountEntity: id,
+            }),
+            { active: true },
+          )
+          .then(() => {
+            upsertEntity(kind, { id, active: true });
+            this.reactivated.push({ id, kind, name: item.text });
+          })
+          .catch(() => {
+            toastHelpers.showErrorToast(
+              __('Could not reactivate :name.', { name: item.text }),
+            );
+            // A newer pick on this side must stay untouched
+            if (this.form.config['account_' + type + '_id'] !== id) {
+              return;
+            }
+            this.accountSelects[type].clear(true);
+            this.resetAccount(type);
+            if (this.getAccountType(type) === 'payee') {
+              this.resetPayee();
+            }
+          });
+        this.pendingActivations.push(activation);
+      },
+
+      // Store the selected account/payee and take what depends on it (currency, payee default category) from
+      // the preloaded data. Returns a promise, so presets can wait before the form is treated as loaded.
+      onAccountSelected(type, id) {
+        id = Number(id);
+        this.form.config['account_' + type + '_id'] = id;
+
+        return this.selectDataReady.then(() => {
+          const entity = this.findEntity(type, id);
+
+          if (this.getAccountType(type) === 'account') {
+            this[type].account_currency =
+              this.selectData.currencies.get(entity?.currency_id) ?? null;
+            return;
           }
+
+          const category = this.selectData.categories.find(
+            (c) => c.id === entity?.category_id,
+          );
+          this.payeeCategory.id = category?.id ?? null;
+          this.payeeCategory.text = category?.full_name ?? null;
         });
       },
 
@@ -1461,28 +1931,61 @@
           return;
         }
 
-        // Returned so callers can wait for the preset and its detail request to
-        // settle before treating the form as loaded.
-        return window.axios
-          .get(this.getAccountApiUrl(type) + '/' + account_entity_id)
-          .then(({ data }) => this.presetAccount(type, data.id, data.name));
+        // Returned so callers can wait for the preset to settle before treating the form as loaded.
+        return this.selectDataReady.then(() => {
+          const entity = this.findEntity(type, account_entity_id);
+
+          return entity
+            ? this.presetAccount(type, entity.id, entity.name)
+            : undefined;
+        });
+      },
+
+      // Put back the entities reactivated for this transaction, once it is saved
+      restoreReactivated() {
+        if (this.deactivateAfterSave) {
+          this.reactivated.forEach(({ id, kind }) => {
+            window.axios
+              .patch(
+                window.route('api.v1.account-entities.patch-active', {
+                  accountEntity: id,
+                }),
+                { active: false },
+              )
+              .then(() => upsertEntity(kind, { id, active: false }))
+              .catch(() => {});
+          });
+        }
+        this.reactivated = [];
       },
 
       onCancel() {
         if (!this.isDirty()) {
+          this.notifyReactivatedStayActive();
           this.$emit('cancel');
           return false;
         }
 
         confirmAction(__('Are you sure you want to discard any changes?'), {
           icon: 'warning',
-          target: this.dropdownParentSelector,
+          target: this.swalTargetSelector,
         }).then((result) => {
           if (result.isConfirmed) {
+            this.notifyReactivatedStayActive();
             this.$emit('cancel');
           }
         });
         return false;
+      },
+
+      notifyReactivatedStayActive() {
+        if (this.reactivated.length > 0 && this.deactivateAfterSave) {
+          toastHelpers.showInfoToast(
+            __(
+              'Reactivated items stay active, because the transaction was not saved.',
+            ),
+          );
+        }
       },
 
       // True once any field differs from its state right after the form finished
@@ -1495,7 +1998,10 @@
         );
       },
 
-      onSubmit() {
+      async onSubmit() {
+        // Let in-flight reactivations settle (they never reject; failures clear the selection)
+        await Promise.all(this.pendingActivations);
+
         // Some preparation before submitting the form
 
         // Adjust the "amount to" value. It needs to match the "amount from" value, if the currencies are the same,
@@ -1509,6 +2015,11 @@
           this.form.config.amount_to = this.form.config.amount_from;
         }
 
+        if (this.isTemplate) {
+          this.saveTemplate(this.buildTemplateDraft());
+          return;
+        }
+
         // Editing an existing transaction needs PATCH method
         if (this.action === 'edit') {
           this.form
@@ -1519,6 +2030,7 @@
               this.form,
             )
             .then((response) => {
+              this.restoreReactivated();
               this.$emit(
                 'success',
                 processTransaction(response.data.transaction),
@@ -1536,6 +2048,14 @@
         this.form
           .post(this.route('api.v1.transactions.store-standard'), this.form)
           .then((response) => {
+            // Count it into the suggestions, so the next entry in this page session ranks correctly
+            if (this.selectData) {
+              applySavedTransaction(this.selectData.usage, {
+                ...response.data.transaction,
+                config_type: 'standard',
+              });
+            }
+            this.restoreReactivated();
             this.$emit(
               'success',
               processTransaction(response.data.transaction),
@@ -1548,16 +2068,60 @@
           });
       },
 
+      // Only the filled fields, in the draft format shared with AI documents (schema v2)
+      buildTemplateDraft() {
+        const config = this.compactDraftPart({
+          account_from_id: this.draftId(this.form.config.account_from_id),
+          account_to_id: this.draftId(this.form.config.account_to_id),
+          amount_from: this.draftDecimal(this.form.config.amount_from),
+          amount_to: this.draftDecimal(this.form.config.amount_to),
+        });
+
+        const items = this.form.items
+          .map((item) => {
+            // Existing tags are objects or IDs; a tag typed in as new text cannot be stored yet
+            const tagIds = (item.tags || [])
+              .map((tag) => this.draftId(tag?.id ?? tag))
+              .filter((id) => Number.isInteger(id));
+
+            return this.compactDraftPart({
+              category_id: this.draftId(item.category_id),
+              amount: this.draftDecimal(item.amount),
+              comment: item.comment,
+              tag_ids: tagIds.length > 0 ? tagIds : null,
+            });
+          })
+          .filter((item) => Object.keys(item).length > 0);
+
+        return {
+          schema_version: 2,
+          config_type: 'standard',
+          transaction_type: this.form.transaction_type,
+          ...this.compactDraftPart({ comment: this.form.comment }),
+          config,
+          ...(items.length > 0 ? { transaction_items: items } : {}),
+        };
+      },
+
       setPayee(payee) {
         // Determine which of the accounts need update
         if (!['withdrawal', 'deposit'].includes(this.form.transaction_type)) {
           return;
         }
 
-        this.presetAccount(
-          this.form.transaction_type === 'withdrawal' ? 'to' : 'from',
-          payee.id,
-          payee.name,
+        // A payee created or reactivated in the modal is not in the preloaded data yet
+        upsertEntity('payees', {
+          id: payee.id,
+          name: payee.name,
+          alias: payee.alias ?? null,
+          active: payee.active ?? true,
+          category_id: payee.config?.category_id ?? null,
+        }).then(() =>
+          this.presetAccount(
+            this.form.transaction_type === 'withdrawal' ? 'to' : 'from',
+            payee.id,
+            payee.name,
+          ),
         );
       },
 

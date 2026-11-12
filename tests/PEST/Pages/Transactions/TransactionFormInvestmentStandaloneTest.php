@@ -17,7 +17,7 @@ const INVESTMENT_EUR = 'Test investment EUR';
 const INVESTMENT_EUR_OPTION = 'Test investment EUR (TIEUR)';
 const INVESTMENT_ACCOUNT_USD = 'Investment account USD';
 const INVESTMENT_ACCOUNT_EUR = 'Investment account EUR';
-const INVESTMENT_FORM_SAVED = "document.querySelector('#BootstrapNotificationContainer')?.textContent.includes('Transaction added')";
+const INVESTMENT_FORM_SAVED = "document.querySelector('.toast-container')?.textContent.includes('Transaction added')";
 
 beforeEach(function () {
     $this->user = User::where('email', 'demo@yaffa.cc')->firstOrFail();
@@ -201,6 +201,48 @@ it('submits an add shares transaction form', function () {
     $this->waitUntil($page, INVESTMENT_FORM_SAVED);
 })->group('critical');
 
+it('changes the transaction type without confirmation when no field would be lost', function () {
+    $page = visit(route('transaction.create', ['type' => 'investment']));
+    investmentStandaloneReady($page);
+
+    // Commission and tax are used by every type, so only they are filled
+    $page->type('#transaction_commission', '30')
+        ->type('#transaction_tax', '40')
+        ->select('#transaction_type', 'dividend');
+
+    $this->waitUntil($page, "document.querySelector('#transaction_quantity').disabled");
+    $page->assertNotPresent('.swal2-popup')
+        ->assertValue('#transaction_type', 'dividend')
+        ->assertValue('#transaction_commission', '30');
+})->group('critical');
+
+it('asks for confirmation before a type change would discard a filled field', function () {
+    $page = visit(route('transaction.create', ['type' => 'investment']));
+    investmentStandaloneReady($page);
+
+    $page->type('#transaction_quantity', '10')
+        ->type('#transaction_price', '20')
+        ->type('#transaction_commission', '30');
+
+    // Cancelling keeps the type and the values
+    $page->select('#transaction_type', 'dividend');
+    $this->waitUntil($page, "document.querySelector('.swal2-cancel')");
+    $page->click('.swal2-cancel');
+    $this->waitUntil($page, "!document.querySelector('.swal2-container')");
+    $page->assertValue('#transaction_type', 'buy')
+        ->assertValue('#transaction_quantity', '10')
+        ->assertValue('#transaction_price', '20');
+
+    // Confirming applies the type and clears only the fields the new type does not use
+    $page->select('#transaction_type', 'dividend');
+    $this->confirmSwal($page);
+    $this->waitUntil($page, "document.querySelector('#transaction_quantity').disabled");
+    $page->assertValue('#transaction_type', 'dividend')
+        ->assertValue('#transaction_quantity', '')
+        ->assertValue('#transaction_price', '')
+        ->assertValue('#transaction_commission', '30');
+})->group('critical');
+
 it('submits a transaction with schedule')->todo();
 
 it('opens a new form after saving with the "add an other transaction" callback', function () {
@@ -365,7 +407,7 @@ it('saves a transaction with price storage enabled', function () {
         ->click('#transactionFormInvestment-Save');
 
     $this->waitUntil($page, INVESTMENT_FORM_SAVED);
-    $this->waitForTextIn($page, '#BootstrapNotificationContainer', 'Investment price stored');
+    $this->waitForTextIn($page, '.toast-container', 'Investment price stored');
 
     $transaction = Transaction::orderByDesc('id')->first();
     expect($transaction)->not->toBeNull()

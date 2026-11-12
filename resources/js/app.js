@@ -13,6 +13,7 @@ const modules = import.meta.glob([
   '!./bootstrap.js',
   '!./shared/lib/i18n/**/*.js',
   '!./shared/lib/confirm/**/*.js',
+  '!./shared/lib/toast/**/*.js',
   '!./shared/lib/vue/installRouteGlobal.js',
   '!./shared/lib/notifications/displayNotifications.js',
   '!./shared/lib/ui/colorMode.js',
@@ -20,7 +21,6 @@ const modules = import.meta.glob([
 ]);
 
 const dataTablesI18nReady = initializeDataTablesI18n(
-  window.YAFFA?.userSettings?.locale || window.YAFFA?.locale,
   window.YAFFA?.userSettings?.language || window.YAFFA?.language,
 ).catch(() => null);
 
@@ -39,9 +39,11 @@ const routeMap = new Map([
   ['home', 'dashboard/index'],
   ['account-groups.index', 'account-groups/index'],
   ['payees.merge.form', 'payee/merge'],
+  ['payees.auto-record-candidates', 'payee/candidates'],
   ['account.history', 'account/history'],
   ['categories.index', 'categories/index'],
   ['categories.show', 'categories/show'],
+  ['ai-hints.index', 'ai-hints/index'],
   ['category-learning.index', 'category-learning/index'],
   ['categories.create', 'categories/form'],
   ['categories.edit', 'categories/form'],
@@ -67,6 +69,7 @@ const routeMap = new Map([
   ['register', 'auth/register'],
   ['login', 'auth/login'],
   ['tags.index', 'tags/index'],
+  ['transaction-templates.index', 'transaction-templates/index'],
   ['user.settings', 'user/settings'],
   ['user.ai-settings', 'user/settings'],
   ['user.investment-provider-settings', 'user/settings'],
@@ -123,8 +126,21 @@ if (
 
 if (
   current === 'transaction.open' &&
-  ['edit', 'clone', 'enter', 'replace'].includes(route().params.action)
+  ['edit', 'clone', 'enter', 'replace', 'template'].includes(
+    route().params.action,
+  )
 ) {
+  loadModule(`transactions/${window.transaction.config_type}`);
+}
+
+if (
+  current === 'transaction-templates.create' &&
+  ['standard', 'investment'].includes(route().params.type)
+) {
+  loadModule(`transactions/${route().params.type}`);
+}
+
+if (current === 'transaction-templates.edit') {
   loadModule(`transactions/${window.transaction.config_type}`);
 }
 

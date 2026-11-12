@@ -1,5 +1,5 @@
 <template>
-  <div class="row">
+  <div class="row" :class="{ 'pb-5': !actionsVisible }">
     <div class="col-12 col-lg-4">
       <div class="card mb-3">
         <div class="card-header">
@@ -18,10 +18,6 @@
           aria-expanded="true"
         >
           <dl class="row mb-0">
-            <dt class="col-7">{{ __('Created at') }}</dt>
-            <dd class="col-5" :title="aiDocument.created_at">
-              {{ createdAtLabel }}
-            </dd>
             <dt class="col-7">{{ __('Status') }}</dt>
             <dd class="col-5">
               <span class="badge" :class="statusClass">
@@ -30,6 +26,10 @@
             </dd>
             <dt class="col-7">{{ __('Source') }}</dt>
             <dd class="col-5">{{ sourceLabel }}</dd>
+            <dt class="col-7">{{ __('Created at') }}</dt>
+            <dd class="col-5" :title="aiDocument.created_at">
+              {{ createdAtLabel }}
+            </dd>
             <dt class="col-7">{{ __('Processed at') }}</dt>
             <dd
               class="col-5"
@@ -44,13 +44,14 @@
             <dt class="col-7">{{ __('Linked transaction') }}</dt>
             <dd class="col-5">
               <a
-                v-if="aiDocument.transaction"
-                :href="transactionLink"
+                v-if="linkedTransactionId"
+                href="#document-tab-transaction"
                 :title="__('View transaction')"
+                @click.prevent="showTransactionTab"
               >
-                {{ aiDocument.transaction.id }}
+                {{ linkedTransactionId }}
               </a>
-              <span v-else class="text-muted">{{ __('Not available') }}</span>
+              <span v-else class="not-set">{{ __('Not set') }}</span>
             </dd>
           </dl>
         </div>
@@ -87,7 +88,7 @@
             <dd
               class="col-6"
               :class="{
-                'text-muted text-italic': !draftTypeLabel,
+                'not-set': !draftTypeLabel,
               }"
             >
               {{ draftTypeLabel || unidentifiedLabel }}
@@ -96,7 +97,7 @@
             <dd
               class="col-6"
               :class="{
-                'text-muted text-italic': isUnidentified(draftData.date),
+                'not-set': isUnidentified(draftData.date),
               }"
             >
               {{ formatRawValue(draftData.date) }}
@@ -107,7 +108,7 @@
               <dd
                 class="col-6"
                 :class="{
-                  'text-muted text-italic': isUnidentified(rawData.account),
+                  'not-set': isUnidentified(rawData.account),
                 }"
               >
                 <template v-if="matchedEntities.account?.matched">
@@ -132,7 +133,7 @@
               <dd
                 class="col-6"
                 :class="{
-                  'text-muted text-italic': isUnidentified(rawData.investment),
+                  'not-set': isUnidentified(rawData.investment),
                 }"
               >
                 <template v-if="matchedEntities.investment?.matched">
@@ -157,7 +158,7 @@
               <dd
                 class="col-6"
                 :class="{
-                  'text-muted text-italic': isUnidentified(rawData.quantity),
+                  'not-set': isUnidentified(rawData.quantity),
                 }"
               >
                 {{ formatRawValue(rawData.quantity) }}
@@ -166,7 +167,7 @@
               <dd
                 class="col-6"
                 :class="{
-                  'text-muted text-italic': isUnidentified(rawData.price),
+                  'not-set': isUnidentified(rawData.price),
                 }"
               >
                 {{ formatRawValue(rawData.price) }}
@@ -175,20 +176,22 @@
               <dd
                 class="col-6"
                 :class="{
-                  'text-muted text-italic': isUnidentified(rawData.amount),
+                  'not-set': isUnidentified(rawData.amount),
                 }"
               >
-                {{ formatRawValue(rawData.amount) }}
+                <span class="text-nowrap">{{ amount.text }}</span>
               </dd>
-              <dt class="col-6">{{ __('Currency') }}</dt>
-              <dd
-                class="col-6"
-                :class="{
-                  'text-muted text-italic': isUnidentified(rawData.currency),
-                }"
-              >
-                {{ formatRawValue(rawData.currency) }}
-              </dd>
+              <template v-if="!amount.hasCurrency">
+                <dt class="col-6">{{ __('Currency') }}</dt>
+                <dd
+                  class="col-6"
+                  :class="{
+                    'not-set': isUnidentified(rawData.currency),
+                  }"
+                >
+                  {{ formatRawValue(rawData.currency) }}
+                </dd>
+              </template>
             </template>
 
             <template v-else>
@@ -197,9 +200,7 @@
                 <dd
                   class="col-6"
                   :class="{
-                    'text-muted text-italic': isUnidentified(
-                      rawData.account_from,
-                    ),
+                    'not-set': isUnidentified(rawData.account_from),
                   }"
                 >
                   <template v-if="matchedEntities.account_from?.matched">
@@ -227,9 +228,7 @@
                 <dd
                   class="col-6"
                   :class="{
-                    'text-muted text-italic': isUnidentified(
-                      rawData.account_to,
-                    ),
+                    'not-set': isUnidentified(rawData.account_to),
                   }"
                 >
                   <template v-if="matchedEntities.account_to?.matched">
@@ -259,7 +258,7 @@
                 <dd
                   class="col-6"
                   :class="{
-                    'text-muted text-italic': isUnidentified(rawData.account),
+                    'not-set': isUnidentified(rawData.account),
                   }"
                 >
                   <template v-if="matchedEntities.account?.matched">
@@ -287,13 +286,21 @@
                 <dd
                   class="col-6"
                   :class="{
-                    'text-muted text-italic':
+                    'not-set':
                       isUnidentified(rawData.payee) &&
                       !matchedEntities.payee?.matched,
                   }"
                 >
                   <template v-if="matchedEntities.payee?.matched">
-                    <span>{{ matchedEntities.payee.name }}</span>
+                    <a
+                      v-if="matchedEntities.payee.url"
+                      :href="matchedEntities.payee.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {{ matchedEntities.payee.name }}
+                    </a>
+                    <span v-else>{{ matchedEntities.payee.name }}</span>
                     <span class="text-muted small ms-1">
                       <i
                         class="fa fa-check-circle text-success"
@@ -311,20 +318,22 @@
               <dd
                 class="col-6"
                 :class="{
-                  'text-muted text-italic': isUnidentified(rawData.amount),
+                  'not-set': isUnidentified(rawData.amount),
                 }"
               >
-                {{ formatRawValue(rawData.amount) }}
+                <span class="text-nowrap">{{ amount.text }}</span>
               </dd>
-              <dt class="col-6">{{ __('Currency') }}</dt>
-              <dd
-                class="col-6"
-                :class="{
-                  'text-muted text-italic': isUnidentified(rawData.currency),
-                }"
-              >
-                {{ formatRawValue(rawData.currency) }}
-              </dd>
+              <template v-if="!amount.hasCurrency">
+                <dt class="col-6">{{ __('Currency') }}</dt>
+                <dd
+                  class="col-6"
+                  :class="{
+                    'not-set': isUnidentified(rawData.currency),
+                  }"
+                >
+                  {{ formatRawValue(rawData.currency) }}
+                </dd>
+              </template>
               <template v-if="showLineItemsCount">
                 <dt class="col-6">{{ __('Line items') }}</dt>
                 <dd class="col-6">
@@ -339,9 +348,11 @@
       <AiDocumentDuplicates
         :ai-document-id="aiDocument.id"
         :can-finalize="canFinalize"
+        :currency="draftCurrency"
+        :draft-amount="draftData.config?.amount_from ?? rawData.amount"
       />
 
-      <div class="card mb-3">
+      <div ref="actionsCard" class="card mb-3">
         <div class="card-header">
           <div
             class="card-title collapse-control"
@@ -358,46 +369,24 @@
           aria-expanded="true"
         >
           <li
-            v-if="canFinalize"
+            v-for="action in actions"
+            :key="action.key"
             class="list-group-item d-flex justify-content-between align-items-center"
           >
-            {{ __('Finalize transaction') }}
+            {{ action.label }}
             <button
-              class="btn btn-xs btn-primary"
+              class="btn btn-xs"
+              :class="`btn-${action.variant}`"
               type="button"
-              :title="__('Finalize transaction')"
-              @click="finalizeDocument"
+              :disabled="action.busyAware && isBusy"
+              :title="action.title || action.label"
+              :aria-label="action.title || action.label"
+              @click="action.handler"
             >
-              <i class="fa fa-fw fa-edit"></i>
-            </button>
-          </li>
-          <li
-            v-if="canReprocess"
-            class="list-group-item d-flex justify-content-between align-items-center"
-          >
-            {{ __('Reprocess document') }}
-            <button
-              class="btn btn-xs btn-warning"
-              type="button"
-              :disabled="isBusy"
-              :title="__('Reprocess document')"
-              @click="reprocessDocument"
-            >
-              <i class="fa fa-fw fa-repeat" :class="{ 'fa-spin': isBusy }"></i>
-            </button>
-          </li>
-          <li
-            class="list-group-item d-flex justify-content-between align-items-center"
-          >
-            {{ __('Delete document') }}
-            <button
-              class="btn btn-xs btn-danger"
-              type="button"
-              :disabled="isBusy"
-              :title="__('Delete')"
-              @click="deleteDocument"
-            >
-              <i class="fa fa-fw fa-trash"></i>
+              <i
+                class="fa fa-fw"
+                :class="[action.icon, { 'fa-spin': action.spin && isBusy }]"
+              ></i>
             </button>
           </li>
         </ul>
@@ -436,7 +425,7 @@
                 {{ __('Email content') }}
               </button>
             </li>
-            <li v-if="aiDocument.custom_prompt" class="nav-item">
+            <li v-if="aiDocument.note" class="nav-item">
               <button
                 id="nav-document-tab-prompt"
                 class="nav-link"
@@ -447,7 +436,7 @@
                 aria-controls="document-tab-prompt"
                 aria-selected="false"
               >
-                {{ __('Custom prompt') }}
+                {{ __('Notes') }}
               </button>
             </li>
             <li v-if="showExtractedDetails" class="nav-item">
@@ -478,6 +467,20 @@
                 {{ __('Processing details') }}
               </button>
             </li>
+            <li v-if="linkedTransactionId" class="nav-item">
+              <button
+                id="nav-document-tab-transaction"
+                class="nav-link"
+                data-coreui-toggle="tab"
+                data-coreui-target="#document-tab-transaction"
+                type="button"
+                role="tab"
+                aria-controls="document-tab-transaction"
+                aria-selected="false"
+              >
+                {{ __('Transaction') }}
+              </button>
+            </li>
           </ul>
         </div>
         <div class="card-body">
@@ -501,14 +504,14 @@
             />
 
             <div
-              v-if="aiDocument.custom_prompt"
+              v-if="aiDocument.note"
               id="document-tab-prompt"
               class="tab-pane fade"
               role="tabpanel"
               aria-labelledby="nav-document-tab-prompt"
               tabindex="0"
             >
-              <pre class="mb-0">{{ aiDocument.custom_prompt }}</pre>
+              <pre class="mb-0">{{ aiDocument.note }}</pre>
             </div>
 
             <div
@@ -533,11 +536,80 @@
               aria-labelledby="nav-document-tab-history"
               tabindex="0"
             >
-              <ai-document-processing-history :entries="processingHistory" />
+              <ai-document-processing-history
+                :entries="processingHistory"
+                :auto-record-note="autoRecordNote"
+              />
+            </div>
+
+            <div
+              v-if="linkedTransactionId"
+              id="document-tab-transaction"
+              class="tab-pane fade"
+              role="tabpanel"
+              aria-labelledby="nav-document-tab-transaction"
+              tabindex="0"
+            >
+              <div v-if="transactionLoading" class="text-center text-muted">
+                <i class="fa fa-spinner fa-spin"></i> {{ __('Loading') }}
+              </div>
+              <div v-else-if="transactionError" class="text-danger">
+                {{ transactionError }}
+              </div>
+              <TransactionShowStandard
+                v-else-if="linkedTransaction?.config_type === 'standard'"
+                :transaction="linkedTransaction"
+              />
+              <TransactionShowInvestment
+                v-else-if="linkedTransaction?.config_type === 'investment'"
+                :transaction="linkedTransaction"
+              />
+              <div v-else class="not-set">{{ __('Not set') }}</div>
+              <div
+                v-if="
+                  linkedTransaction?.id &&
+                  !transactionLoading &&
+                  !transactionError
+                "
+                class="card mb-0"
+              >
+                <div class="card-body">
+                  <ActionButtonBar
+                    :transaction="linkedTransaction"
+                    :is-modal="false"
+                    edit-callback="back"
+                    :on-deleted="handleLinkedTransactionDeleted"
+                    @transaction-updated="(t) => (linkedTransaction = t)"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Mobile only: the Actions card's actions, pinned to the bottom once the card scrolls out of view -->
+    <div
+      v-if="!actionsVisible && actions.length > 0"
+      class="position-fixed bottom-0 start-0 end-0 d-flex gap-2 p-2 bg-body border-top shadow d-lg-none sticky-action-bar"
+    >
+      <button
+        v-for="action in actions"
+        :key="action.key"
+        class="btn flex-fill"
+        :class="`btn-${action.variant}`"
+        type="button"
+        :disabled="action.busyAware && isBusy"
+        :title="action.title || action.label"
+        :aria-label="action.title || action.label"
+        @click="action.handler"
+      >
+        <i
+          class="fa fa-fw"
+          :class="[action.icon, { 'fa-spin': action.spin && isBusy }]"
+        ></i>
+      </button>
     </div>
 
     <transaction-form-modal-standard :ai-document-id="aiDocument.id" />
@@ -547,14 +619,32 @@
 </template>
 
 <script setup>
-  import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-  import { getTransactionTypeConfig } from '@/shared/lib/helpers';
-  import { __, toFormattedDateTime } from '@/shared/lib/i18n';
+  import {
+    computed,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    useTemplateRef,
+  } from 'vue';
+  import {
+    getTransactionTypeConfig,
+    processTransaction,
+  } from '@/shared/lib/helpers';
+  import {
+    __,
+    toFormattedCurrency,
+    toFormattedDate,
+    toFormattedDateTime,
+    toFormattedNumber,
+  } from '@/shared/lib/i18n';
   import * as toastHelpers from '@/shared/lib/toast';
-  import { storeNotification } from '@/shared/lib/notifications/handleNotifications';
+  import { storeToast } from '@/shared/lib/notifications/handleNotifications';
   import TransactionFormModalStandard from '@/transactions/components/form/ModalStandard.vue';
   import TransactionFormModalInvestment from '@/transactions/components/form/ModalInvestment.vue';
   import TransactionShowModal from '@/transactions/components/display/Modal.vue';
+  import TransactionShowStandard from '@/transactions/components/display/ShowStandard.vue';
+  import ActionButtonBar from '@/transactions/components/display/ActionButtonBar.vue';
+  import TransactionShowInvestment from '@/transactions/components/display/ShowInvestment.vue';
   import AiDocumentEmailViewer from './AiDocumentEmailViewer.vue';
   import AiDocumentFileViewer from './AiDocumentFileViewer.vue';
   import AiDocumentExtractedDetails from './AiDocumentExtractedDetails.vue';
@@ -570,6 +660,13 @@
   const route = window.route;
   const locale = window.YAFFA.userSettings.locale || 'en';
   const unidentifiedLabel = __('Unidentified');
+  const dateTimeNoSeconds = {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+  };
 
   // Computed properties used in the component
   const createdAtLabel = computed(() => {
@@ -577,7 +674,12 @@
       return __('Not set');
     }
 
-    return toFormattedDateTime(aiDocument.value.created_at, locale);
+    return toFormattedDateTime(
+      aiDocument.value.created_at,
+      locale,
+      '',
+      dateTimeNoSeconds,
+    );
   });
 
   const processedAtLabel = computed(() => {
@@ -585,7 +687,12 @@
       return __('Not set');
     }
 
-    return toFormattedDateTime(aiDocument.value.processed_at, locale);
+    return toFormattedDateTime(
+      aiDocument.value.processed_at,
+      locale,
+      '',
+      dateTimeNoSeconds,
+    );
   });
 
   const statusLabel = computed(
@@ -606,8 +713,10 @@
       case 'processing_failed':
         return 'bg-danger';
       case 'ready_for_review':
+      case 'awaiting_itemization':
         return 'bg-warning';
       case 'finalized':
+      case 'auto_recorded':
         return 'bg-success';
       default:
         return 'bg-secondary';
@@ -651,10 +760,13 @@
     () => aiDocument.value.status === 'ready_for_review' && hasDraftData.value,
   );
 
+  // A document dismissed before it was processed has no extraction to show (only the dismissal note)
   const showExtractedDetails = computed(
     () =>
       hasDraftData.value &&
-      ['ready_for_review', 'finalized'].includes(aiDocument.value.status),
+      (['ready_for_review', 'finalized'].includes(aiDocument.value.status) ||
+        (aiDocument.value.status === 'dismissed' &&
+          !!(draftData.value.raw || draftData.value.config_type))),
   );
 
   const processingHistory = computed(
@@ -663,23 +775,292 @@
 
   const hasProcessingHistory = computed(
     () =>
-      showExtractedDetails.value &&
-      Array.isArray(processingHistory.value) &&
-      processingHistory.value.length > 0,
+      (showExtractedDetails.value &&
+        Array.isArray(processingHistory.value) &&
+        processingHistory.value.length > 0) ||
+      !!autoRecordNote.value,
   );
 
+  // Documents linked to a transaction cannot be reprocessed, see App\Enums\AiDocumentStatus::reprocessable()
   const canReprocess = computed(() =>
+    ['ready_for_review', 'processing_failed', 'dismissed'].includes(
+      aiDocument.value.status,
+    ),
+  );
+
+  const canDismiss = computed(() =>
     ['ready_for_review', 'processing_failed'].includes(aiDocument.value.status),
   );
 
-  const transactionLink = computed(() =>
-    aiDocument.value.transaction
-      ? route('transaction.open', {
-          transaction: aiDocument.value.transaction.id,
-          action: 'show',
-        })
-      : '#',
+  // The transaction the document created, or the one it was closed against as a duplicate
+  const linkedTransactionId = computed(
+    () =>
+      aiDocument.value.transaction?.id ??
+      aiDocument.value.origins?.find(
+        (origin) => origin.relation === 'duplicate_of',
+      )?.transaction_id ??
+      null,
   );
+
+  const linkedTransaction = ref(null);
+  const transactionLoading = ref(false);
+  const transactionError = ref('');
+
+  const loadLinkedTransaction = () => {
+    if (!linkedTransactionId.value) {
+      return;
+    }
+
+    transactionLoading.value = true;
+    transactionError.value = '';
+
+    window.axios
+      .get(
+        route('api.v1.transactions.show', {
+          transaction: linkedTransactionId.value,
+        }),
+      )
+      .then((response) => {
+        linkedTransaction.value = processTransaction(response.data.transaction);
+      })
+      .catch((error) => {
+        transactionError.value = __(
+          'Error while loading the transaction: :errorMessage',
+          { errorMessage: error.response?.data?.message || error.message },
+        );
+      })
+      .finally(() => {
+        transactionLoading.value = false;
+      });
+  };
+
+  const handleLinkedTransactionDeleted = () => {
+    linkedTransaction.value = null;
+    showFilesTab();
+    refreshDocument();
+  };
+
+  // An auto-recorded transaction still waiting for the person to confirm it
+  const unreviewedCreatedOrigin = computed(
+    () =>
+      aiDocument.value.origins?.find(
+        (origin) => origin.relation === 'created' && !origin.reviewed_at,
+      ) ?? null,
+  );
+
+  const markTransactionChecked = () => {
+    const origin = unreviewedCreatedOrigin.value;
+
+    isBusy.value = true;
+
+    window.axios
+      .post(route('api.v1.transaction-origins.review', { origin: origin.id }))
+      .then(() => {
+        toastHelpers.showSuccessToast(__('Transaction marked as checked'));
+        handleOriginReviewed({ detail: { id: origin.id } });
+      })
+      .catch((error) => {
+        toastHelpers.showErrorToast(
+          __('Error while reviewing document: :errorMessage', {
+            errorMessage: error.response?.data?.message || error.message,
+          }),
+        );
+      })
+      .finally(() => {
+        isBusy.value = false;
+      });
+  };
+
+  // Fired by the transaction details (or the button above) once an origin is reviewed
+  const handleOriginReviewed = (event) => {
+    const reviewedAt = new Date().toISOString();
+
+    [aiDocument.value.origins, linkedTransaction.value?.origins].forEach(
+      (origins) =>
+        origins?.forEach((origin) => {
+          if (origin.id === event.detail.id && !origin.reviewed_at) {
+            origin.reviewed_at = reviewedAt;
+          }
+        }),
+    );
+  };
+
+  // The document's currency with the user's rounding settings, for formatting candidate amounts
+  const draftCurrency = computed(() => {
+    const iso = String(rawData.value.currency || '').toLowerCase();
+
+    return iso
+      ? (window.aiDocumentCurrencies || []).find(
+          (c) => c.iso_code.toLowerCase() === iso,
+        ) || null
+      : null;
+  });
+
+  // The amount in the document's currency, or as a plain number when the currency is missing or invalid
+  const amount = computed(() => {
+    const value = rawData.value.amount;
+
+    if (isUnidentified(value)) {
+      return { text: unidentifiedLabel, hasCurrency: false };
+    }
+
+    const iso = String(rawData.value.currency || '')
+      .trim()
+      .toUpperCase();
+
+    if (iso) {
+      try {
+        return {
+          text: toFormattedCurrency(value, locale, {
+            generic_decimal_precision: null,
+            ...draftCurrency.value,
+            iso_code: iso,
+          }),
+          hasCurrency: true,
+        };
+      } catch {
+        // Not a valid ISO 4217 code: shown as unknown below
+      }
+    }
+
+    return { text: toFormattedNumber(value, locale), hasCurrency: false };
+  });
+
+  // Why the document was (not) recorded automatically, see App\Services\AutoRecord\GateEvaluator
+  const autoRecordNote = computed(() => {
+    const document = aiDocument.value;
+
+    if (document.status === 'auto_recorded') {
+      const reason = document.origins?.find(
+        (origin) => origin.relation === 'created',
+      )?.decision_reason;
+
+      return reason || __('Recorded automatically');
+    }
+
+    if (document.status === 'dismissed') {
+      const reason = document.processed_transaction_data?.dismissal?.reason;
+
+      if (reason === 'non_financial') {
+        return __(
+          'Dismissed automatically: the document was recognized as not financial.',
+        );
+      }
+
+      return reason === 'manual' ? __('Dismissed manually.') : null;
+    }
+
+    const autoRecord = document.processed_transaction_data?.auto_record;
+
+    if (document.status === 'awaiting_itemization') {
+      return autoRecord?.hold_until
+        ? __('Waiting for the receipt until :date.', {
+            date: toFormattedDate(
+              new Date(autoRecord.hold_until),
+              locale,
+              null,
+            ),
+          })
+        : __('Waiting for the receipt.');
+    }
+
+    if (document.status === 'ready_for_review' && autoRecord?.reason) {
+      const { amount, median, from, to } = autoRecord.context || {};
+      const currency = rawData.value.currency;
+
+      // Show the amounts in the document's currency, rounded as the user's currency (if known) is configured
+      if (
+        autoRecord.failed_gate === 'amount' &&
+        amount &&
+        median &&
+        from &&
+        to &&
+        currency
+      ) {
+        const currencySettings = {
+          generic_decimal_precision: null,
+          ...(window.aiDocumentCurrencies || []).find(
+            (c) => c.iso_code.toLowerCase() === String(currency).toLowerCase(),
+          ),
+          iso_code: String(currency).toUpperCase(),
+        };
+
+        return __('Not recorded automatically: :reason', {
+          reason: __(
+            'Amount: :amount is outside the usual range (around :median, accepted :from - :to).',
+            {
+              amount: toFormattedCurrency(amount, locale, currencySettings),
+              median: toFormattedCurrency(median, locale, currencySettings),
+              from: toFormattedCurrency(from, locale, currencySettings),
+              to: toFormattedCurrency(to, locale, currencySettings),
+            },
+          ),
+        });
+      }
+
+      return __('Not recorded automatically: :reason', {
+        reason: autoRecord.reason,
+      });
+    }
+
+    return null;
+  });
+
+  const actions = computed(() =>
+    [
+      {
+        key: 'finalize',
+        show: canFinalize.value,
+        label: __('Finalize transaction'),
+        icon: 'fa-edit',
+        variant: 'primary',
+        handler: finalizeDocument,
+      },
+      {
+        key: 'check',
+        show: !!unreviewedCreatedOrigin.value,
+        label: __('Mark transaction as checked'),
+        icon: 'fa-check',
+        variant: 'success',
+        busyAware: true,
+        handler: markTransactionChecked,
+      },
+      {
+        key: 'reprocess',
+        show: canReprocess.value,
+        label: __('Reprocess document'),
+        icon: 'fa-repeat',
+        variant: 'warning',
+        busyAware: true,
+        spin: true,
+        handler: reprocessDocument,
+      },
+      {
+        key: 'dismiss',
+        show: canDismiss.value,
+        label: __('Dismiss document'),
+        icon: 'fa-ban',
+        variant: 'secondary',
+        busyAware: true,
+        handler: dismissDocument,
+      },
+      {
+        key: 'delete',
+        show: true,
+        label: __('Delete document'),
+        title: __('Delete'),
+        icon: 'fa-trash',
+        variant: 'danger',
+        busyAware: true,
+        handler: deleteDocument,
+      },
+    ].filter((action) => action.show),
+  );
+
+  // The sticky action bar appears only while the Actions card is out of the viewport
+  const actionsCard = useTemplateRef('actionsCard');
+  const actionsVisible = ref(true);
+  let actionsObserver = null;
 
   const isUnidentified = (value) => {
     return value === null || typeof value === 'undefined' || value === '';
@@ -837,6 +1218,39 @@
     });
   };
 
+  const dismissDocument = () => {
+    if (isBusy.value) {
+      return;
+    }
+
+    isBusy.value = true;
+
+    window.axios
+      .post(
+        window.route('api.v1.documents.dismiss', {
+          aiDocument: aiDocument.value.id,
+        }),
+      )
+      .then((response) => {
+        aiDocument.value.status = response.data.status;
+        aiDocument.value.processed_transaction_data = {
+          ...aiDocument.value.processed_transaction_data,
+          dismissal: { reason: 'manual' },
+        };
+        toastHelpers.showSuccessToast(response.data.message);
+      })
+      .catch((error) => {
+        toastHelpers.showErrorToast(
+          __('Error while dismissing document: :errorMessage', {
+            errorMessage: error.response?.data?.error || error.message,
+          }),
+        );
+      })
+      .finally(() => {
+        isBusy.value = false;
+      });
+  };
+
   const deleteDocument = () => {
     if (isBusy.value) {
       return;
@@ -859,9 +1273,7 @@
           }),
         )
         .then(() => {
-          storeNotification('success', __('Document deleted'), {
-            dismissible: true,
-          });
+          storeToast('success', __('Document deleted'));
           window.location.href = route('ai-documents.index');
         })
         .catch((error) => {
@@ -882,6 +1294,16 @@
       window.document.getElementById('nav-document-tab-extracted'),
     );
     tab.show();
+  };
+
+  // On narrow screens the tabs are below the cards, so bring them into view as well
+  const showTransactionTab = () => {
+    const button = window.document.getElementById(
+      'nav-document-tab-transaction',
+    );
+
+    new window.coreui.Tab(button).show();
+    button.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   const showFilesTab = () => {
@@ -907,6 +1329,7 @@
       .then((response) => {
         if (response?.data?.document) {
           aiDocument.value = response.data.document;
+          loadLinkedTransaction();
         }
       });
 
@@ -923,14 +1346,127 @@
       return;
     }
 
+    // Read the draft's payee before the refresh replaces the document
+    const aliasOffer = getPayeeAliasOffer(transaction);
+
     refreshDocument();
+
+    if (aliasOffer) {
+      offerPayeeAlias(aliasOffer);
+    }
+  };
+
+  // The leading words of the extracted payee text, up to the first word with a digit (store numbers, cities
+  // and the like follow it), at most three words
+  const leadingWords = (text) => {
+    const words = String(text || '')
+      .trim()
+      .split(/\s+/);
+    const firstNumbered = words.findIndex((word) => /\d/.test(word));
+
+    return words
+      .slice(0, firstNumbered === -1 ? words.length : firstNumbered)
+      .slice(0, 3)
+      .join(' ');
+  };
+
+  // When the person picked another payee than the one the document was matched to, the extracted text is
+  // worth remembering as an alias of the chosen payee
+  const getPayeeAliasOffer = (transaction) => {
+    const payeeId =
+      {
+        withdrawal: transaction.config?.account_to_id,
+        deposit: transaction.config?.account_from_id,
+      }[transaction.transaction_type] ?? null;
+    const alias = leadingWords(rawData.value.payee);
+
+    if (!payeeId || !alias || payeeId === matchedEntities.value.payee?.id) {
+      return null;
+    }
+
+    return { payeeId, alias };
+  };
+
+  const offerPayeeAlias = ({ payeeId, alias }) => {
+    window.axios
+      .get(route('api.v1.payees.show', { accountEntity: payeeId }))
+      .then(({ data: payee }) => {
+        const knownNames = [payee.name, ...(payee.alias || '').split(/\r?\n/)];
+
+        if (
+          knownNames.some(
+            (name) => name.trim().toLowerCase() === alias.toLowerCase(),
+          )
+        ) {
+          return null;
+        }
+
+        return Swal.fire({
+          text: __(
+            'Add ":alias" as an alias of :payee? Documents with this payee text will then be matched to it.',
+            { alias, payee: payee.name },
+          ),
+          icon: 'question',
+          showCancelButton: true,
+          cancelButtonText: __('No'),
+          confirmButtonText: __('Add alias'),
+          buttonsStyling: false,
+          customClass: {
+            confirmButton: 'btn btn-primary',
+            cancelButton: 'btn btn-secondary ms-3',
+          },
+        }).then((result) => {
+          if (!result.isConfirmed) {
+            return null;
+          }
+
+          return window.axios
+            .patch(route('api.v1.payees.update', { accountEntity: payeeId }), {
+              config_type: 'payee',
+              name: payee.name,
+              active: payee.active,
+              alias: [payee.alias, alias].filter(Boolean).join('\n'),
+              simplified: true,
+              config: { category_id: payee.config?.category_id ?? null },
+            })
+            .then(() => {
+              toastHelpers.showSuccessToast(__('Alias added'));
+            });
+        });
+      })
+      .catch((error) => {
+        toastHelpers.showErrorToast(
+          error.response?.data?.errors?.alias?.[0] ||
+            __('Unable to add the alias.'),
+        );
+      });
   };
 
   onMounted(() => {
     window.addEventListener('transaction-created', handleTransactionCreated);
+    window.addEventListener('transactionOriginReviewed', handleOriginReviewed);
+    loadLinkedTransaction();
+
+    actionsObserver = new IntersectionObserver(([entry]) => {
+      actionsVisible.value = entry.isIntersecting;
+    });
+    actionsObserver.observe(actionsCard.value);
+
+    // Set by the document list's "Finalize transaction" action
+    if (
+      new URLSearchParams(window.location.search).has('finalize') &&
+      canFinalize.value
+    ) {
+      finalizeDocument();
+    }
   });
 
   onBeforeUnmount(() => {
+    actionsObserver?.disconnect();
     window.removeEventListener('transaction-created', handleTransactionCreated);
+    window.removeEventListener(
+      'transactionOriginReviewed',
+      handleOriginReviewed,
+    );
   });
 </script>

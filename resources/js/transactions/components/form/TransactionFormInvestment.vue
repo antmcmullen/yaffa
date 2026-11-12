@@ -6,6 +6,13 @@
     />
 
     <form accept-charset="UTF-8" autocomplete="off" @submit.prevent="onSubmit">
+      <template-fields
+        v-if="isTemplate"
+        v-model:name="templateName"
+        v-model:is-featured="templateIsFeatured"
+        :notices="templateInfo?.notices || []"
+        :errors="form.errors"
+      ></template-fields>
       <div class="row">
         <div class="col-md-4">
           <div class="card mb-3">
@@ -33,7 +40,7 @@
                     </label>
                     <select
                       id="transaction_type"
-                      v-model="form.transaction_type"
+                      :value="form.transaction_type"
                       class="form-select"
                       :disabled="!isBaseSettingsEditsAllowed"
                       @change="transactionTypeChanged($event)"
@@ -93,6 +100,7 @@
             <div class="card-body">
               <div class="row">
                 <div
+                  v-if="!isTemplate"
                   class="col-4 col-sm-2 col-md-4 col-lg-2 mb-3 mb-sm-0 mb-md-3 mb-lg-0 d-flex justify-content-center"
                 >
                   <input
@@ -113,6 +121,7 @@
                   </label>
                 </div>
                 <div
+                  v-if="!isTemplate"
                   :class="[
                     action === 'enter'
                       ? 'col-8 col-sm-2 col-md-4 col-lg-2'
@@ -143,7 +152,6 @@
                       id="checkbox-investment-catch-up-schedule"
                       v-model="form.catch_up_schedule"
                       class="form-check-input"
-                      dusk="checkbox-investment-catch-up-schedule"
                       type="checkbox"
                       value="1"
                     />
@@ -215,6 +223,16 @@
               ></span>
             </div>
             <div class="card-body">
+              <div v-if="selectDataError" class="alert alert-danger mb-3">
+                {{ __('Could not load the account and investment lists.') }}
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-danger ms-2"
+                  @click="retrySelectData"
+                >
+                  {{ __('Retry') }}
+                </button>
+              </div>
               <div class="row">
                 <div class="col-12 mb-3">
                   <div class="form-group">
@@ -238,6 +256,26 @@
                       class="form-control"
                       style="width: 100% !important"
                     ></select>
+                  </div>
+                </div>
+                <div v-if="reactivated.length > 0" class="col-12 mt-2">
+                  <div class="form-check">
+                    <input
+                      id="checkbox-deactivate-reactivated"
+                      v-model="deactivateAfterSave"
+                      class="form-check-input"
+                      type="checkbox"
+                    />
+                    <label
+                      class="form-check-label"
+                      for="checkbox-deactivate-reactivated"
+                    >
+                      {{
+                        reactivated.length === 1
+                          ? __('One-time use: keep item inactive')
+                          : __('One-time use: keep items inactive')
+                      }}
+                    </label>
                   </div>
                 </div>
               </div>
@@ -452,7 +490,7 @@
         <div class="card-body">
           <div class="row justify-content-end">
             <div
-              v-if="!fromModal"
+              v-if="!fromModal && !isTemplate"
               class="d-none d-lg-block col-lg-12 col-xl-9 mb-3 mb-lg-3 mb-xl-0"
               dusk="action-after-save-desktop-button-group"
             >
@@ -478,7 +516,7 @@
               </div>
             </div>
             <div
-              v-if="!fromModal"
+              v-if="!fromModal && !isTemplate"
               class="col-12 col-sm-8 d-block d-lg-none mb-3 mb-sm-0"
             >
               <label
@@ -539,6 +577,8 @@
   import { confirmAction } from '@/shared/lib/confirm';
 
   import Form from 'vform';
+  import templateForm from '@/transaction-templates/templateForm';
+  import TemplateFields from '@/transaction-templates/components/TemplateFields.vue';
   import {
     Button as SubmitButton,
     AlertErrors,
@@ -562,18 +602,33 @@
   } from '@/shared/lib/i18n';
   import { markRaw } from 'vue';
   import {
-    createRemoteSelect,
+    createLocalSelect,
+    lockSelect,
+    unlockSelect,
     setSelected,
     clearSelect,
   } from '@/shared/lib/tom-select';
+  import {
+    loadSelectData,
+    upsertEntity,
+    investmentUsage,
+    investmentAccountUsage,
+    rankByUsage,
+    searchEntities,
+    applySavedTransaction,
+  } from '@/shared/lib/select-data';
+  import * as toastHelpers from '@/shared/lib/toast';
 
   export default {
     components: {
+      TemplateFields,
       TransactionSchedule,
       MathInput,
       SubmitButton,
       AlertErrors,
     },
+
+    mixins: [templateForm],
 
     props: {
       action: String,
@@ -601,7 +656,7 @@
         type: Number,
         default: null,
       },
-      dropdownParentSelector: {
+      swalTargetSelector: {
         type: String,
         default: 'body',
       },
@@ -638,13 +693,23 @@
           interval: 1,
         },
         ai_document_id: null,
+        transaction_template_id: null,
       });
 
       // Other values
       data.account_currency = null;
       data.investment_currency = null;
 
-      data.callback = this.initialCallback;
+      // Inactive accounts/investments reactivated from the dropdown for this transaction
+      data.reactivated = [];
+      data.deactivateAfterSave = true;
+      data.selectDataError = false;
+
+      // Finalizing an AI document: default to returning to the document list
+      data.callback =
+        this.action === 'finalize' && this.aiDocumentId !== null
+          ? 'returnToAiDocuments'
+          : this.initialCallback;
 
       // Store price feature related data
       data.storePriceEnabled = false;
@@ -677,6 +742,12 @@
           value: 'returnToInvestment',
           label: __('callback.returnToInvestment'),
           enabled: true,
+        },
+        {
+          value: 'returnToAiDocuments',
+          label: __('callback.returnToAiDocuments'),
+          // Only when finalizing an AI document
+          enabled: this.action === 'finalize' && this.aiDocumentId !== null,
         },
         {
           value: 'returnToDashboard',
@@ -774,7 +845,9 @@
 
       // Do we allow the user to edit the base settings?
       isBaseSettingsEditsAllowed() {
-        return ['create', 'clone', 'finalize'].includes(this.action);
+        return ['create', 'clone', 'finalize', 'template'].includes(
+          this.action,
+        );
       },
 
       shouldShowCalcPriceButton() {
@@ -846,9 +919,11 @@
         // markFormClean(). The async presets above set config.account_id/investment_id
         // and the currencies that depend on them, so this must wait for both to settle
         // rather than snapshotting right after initializeTransaction().
-        Promise.all([accountReady, investmentReady]).then(() => {
-          this.$nextTick(() => this.markFormClean());
-        });
+        Promise.all([this.selectDataReady, accountReady, investmentReady]).then(
+          () => {
+            this.$nextTick(() => this.markFormClean());
+          },
+        );
       },
 
       existingPriceForDate(value) {
@@ -900,20 +975,23 @@
       // Set form action
       this.form.action = this.action;
       this.form.ai_document_id = this.aiDocumentId;
+      this.form.transaction_template_id = this.transactionTemplateId;
+
+      // The shared reference data behind the selects (not reactive: it is read on demand)
+      this.selectData = null;
+      this.pendingActivations = [];
+      this.loadReferenceData();
     },
 
     mounted() {
       this.accountSelect = markRaw(
-        createRemoteSelect(document.getElementById('account'), {
-          url: '/api/v1/accounts/investment',
-          // Only accounts in the selected investment's currency; read on every request (no cache)
-          params: (term) => ({
-            q: term || undefined,
-            transaction_type: this.form.transaction_type,
-            currency_id: this.investment_currency?.id,
-          }),
+        createLocalSelect(document.getElementById('account'), {
+          suggestions: () => this.accountSuggestions(),
+          search: (term) =>
+            this.toItems(searchEntities(this.accountCandidates(true), term)),
+          searchLabel: () => this.groupLabel('Matches', 'investment'),
           placeholder: __('Select account'),
-          onSelect: (item) => this.onAccountSelected(item.id),
+          onSelect: (item) => this.onAccountPicked(item),
           onClear: () => {
             this.form.config.account_id = null;
             this.account_currency = null;
@@ -921,47 +999,22 @@
         }),
       );
 
-      // Load default value for account
-      const accountReady = this.getDefaultAccountDetails(
-        this.form.config.account_id,
-      );
-
       this.investmentSelect = markRaw(
-        createRemoteSelect(document.getElementById('investment'), {
-          url: '/api/v1/investments',
-          params: (term) => ({
-            query: term || undefined,
-            active: 1,
-            currency_id: this.account_currency?.id,
-            limit: 10,
-            // We rely on server-side sorting, so let's set it here
-            sort_by: 'name',
-            sort_order: 'asc',
-          }),
-          mapResult: (item) => ({
-            id: item.id,
-            text: item.name,
-            symbol: item.symbol,
-            currency_id: item.currency_id,
-          }),
+        createLocalSelect(document.getElementById('investment'), {
+          suggestions: () => this.investmentSuggestions(),
+          // The symbol is searchable as the entity's alias
+          search: (term) =>
+            this.toItems(searchEntities(this.investmentCandidates(true), term)),
+          searchLabel: () => this.groupLabel('Matches', 'account'),
           // Investment names and symbols are user data: always escaped
           renderOption: (data, escape) =>
-            `<div>${escape(data.text)} <span class="text-muted">(${escape(data.symbol)})</span></div>`,
+            `<div>${escape(data.text)} <span class="text-muted">(${escape(data.symbol)})</span>` +
+            (data.active === false
+              ? ` <span class="badge text-bg-secondary ms-1">${escape(__('inactive'))}</span>`
+              : '') +
+            '</div>',
           placeholder: __('Select investment'),
-          onSelect: (item) => {
-            this.form.config.investment_id = Number(item.id);
-
-            // Set currency id immediately to avoid a race condition in account filtering.
-            if (item.currency_id) {
-              this.investment_currency = { id: item.currency_id };
-            }
-
-            window.axios
-              .get(route('api.v1.investments.show', { investment: item.id }))
-              .then(({ data }) => {
-                this.investment_currency = data.currency;
-              });
-          },
+          onSelect: (item) => this.onInvestmentPicked(item),
           onClear: () => {
             this.investment_currency = null;
             this.form.config.investment_id = null;
@@ -972,7 +1025,15 @@
         }),
       );
 
-      // Load default value for investment
+      if (!this.selectData) {
+        lockSelect(this.accountSelect, __('Loading…'));
+        lockSelect(this.investmentSelect, __('Loading…'));
+      }
+
+      // Load default values for account and investment
+      const accountReady = this.getDefaultAccountDetails(
+        this.form.config.account_id,
+      );
       const investmentReady = this.getDefaultInvestmentDetails(
         this.form.config.investment_id,
       );
@@ -985,9 +1046,11 @@
 
       // Snapshot the settled post-load state (both account/investment details loaded
       // and synced into form.config) as the isDirty() baseline.
-      Promise.all([accountReady, investmentReady]).then(() => {
-        this.$nextTick(() => this.markFormClean());
-      });
+      Promise.all([this.selectDataReady, accountReady, investmentReady]).then(
+        () => {
+          this.$nextTick(() => this.markFormClean());
+        },
+      );
     },
 
     beforeUnmount() {
@@ -996,14 +1059,245 @@
     },
 
     methods: {
-      // Store the selected account and load its currency. Returns the request, so presets can
-      // wait for it before the form is treated as loaded.
+      // Load the shared reference data. Everything the selects show, and the currencies looked up on
+      // selection, come from it - no per-click requests.
+      loadReferenceData() {
+        this.selectDataError = false;
+        this.selectDataReady = loadSelectData().then(
+          (data) => {
+            this.selectData = data;
+            if (this.accountSelect?.isLocked) {
+              unlockSelect(this.accountSelect, __('Select account'));
+              unlockSelect(this.investmentSelect, __('Select investment'));
+            }
+          },
+          (error) => {
+            this.selectDataError = true;
+            throw error;
+          },
+        );
+        // The rejection is surfaced through selectDataError; callers that chain on it handle it themselves
+        this.selectDataReady.catch(() => {});
+
+        return this.selectDataReady;
+      },
+
+      // Retry a failed load, then apply the presets that were waiting for it
+      retrySelectData() {
+        this.loadReferenceData().then(() =>
+          Promise.all([
+            this.getDefaultAccountDetails(this.form.config.account_id),
+            this.getDefaultInvestmentDetails(this.form.config.investment_id),
+          ]).then(() => {
+            this.$nextTick(() => this.markFormClean());
+          }),
+        );
+      },
+
+      // Active accounts in the selected investment's currency (all, if none is selected). With
+      // `withInactive`, inactive ones are included too: they are found by search and reactivated on pick.
+      accountCandidates(withInactive = false) {
+        if (!this.selectData) {
+          return [];
+        }
+        const currencyId = this.investment_currency?.id;
+
+        return this.selectData.accounts.filter(
+          (a) =>
+            (withInactive || a.active) &&
+            (!currencyId || a.currency_id === currencyId),
+        );
+      },
+
+      // Active investments in the selected account's currency (all, if none is selected)
+      investmentCandidates(withInactive = false) {
+        if (!this.selectData) {
+          return [];
+        }
+        const currencyId = this.account_currency?.id;
+
+        return this.selectData.investments
+          .filter(
+            (i) =>
+              (withInactive || i.active) &&
+              (!currencyId || i.currency_id === currencyId),
+          )
+          .map((i) => ({ ...i, alias: i.symbol }));
+      },
+
+      toItems(entities) {
+        return entities.map((e) => ({ ...e, text: e.name }));
+      },
+
+      // "Other" / "Matches", with a suffix while the other side's currency limits the list
+      groupLabel(label, otherSide) {
+        const selected =
+          otherSide === 'investment'
+            ? this.investment_currency
+            : this.account_currency;
+
+        return selected
+          ? `${__(label)} - ${
+              otherSide === 'investment'
+                ? __('matching investment currency')
+                : __('matching account currency')
+            }`
+          : __(label);
+      },
+
+      rankedGroups(candidates, usageMap, otherSide) {
+        const { mostUsed, recent, fill } = rankByUsage(candidates, usageMap);
+
+        return [
+          { id: 'most-used', label: __('Most used'), items: mostUsed },
+          { id: 'recent', label: __('Recent'), items: recent },
+          {
+            id: 'other',
+            label: this.groupLabel('Other', otherSide),
+            items: fill,
+          },
+        ].map((g) => ({ ...g, items: this.toItems(g.items) }));
+      },
+
+      accountSuggestions() {
+        if (!this.selectData) {
+          return [];
+        }
+
+        return this.rankedGroups(
+          this.accountCandidates(),
+          investmentAccountUsage(this.selectData.usage, {
+            investmentId: this.form.config.investment_id,
+            transactionType: this.form.transaction_type,
+          }),
+          'investment',
+        );
+      },
+
+      investmentSuggestions() {
+        if (!this.selectData) {
+          return [];
+        }
+
+        return this.rankedGroups(
+          this.investmentCandidates(),
+          investmentUsage(this.selectData.usage, {
+            accountId: this.form.config.account_id,
+          }),
+          'account',
+        );
+      },
+
+      // Store the selected account and take its currency from the preloaded data. Returns a promise, so
+      // presets can wait for it before the form is treated as loaded.
       onAccountSelected(id) {
         this.form.config.account_id = Number(id);
 
-        return window.axios.get('/api/v1/accounts/' + id).then(({ data }) => {
-          this.account_currency = data.config.currency;
+        return this.selectDataReady.then(() => {
+          const account = this.selectData.accounts.find(
+            (a) => a.id === Number(id),
+          );
+          this.account_currency =
+            this.selectData.currencies.get(account?.currency_id) ?? null;
         });
+      },
+
+      onInvestmentSelected(id) {
+        this.form.config.investment_id = Number(id);
+
+        return this.selectDataReady.then(() => {
+          const investment = this.selectData.investments.find(
+            (i) => i.id === Number(id),
+          );
+          this.investment_currency =
+            this.selectData.currencies.get(investment?.currency_id) ?? null;
+        });
+      },
+
+      // A user's pick: an inactive entity is reactivated first
+      onAccountPicked(item) {
+        this.onAccountSelected(item.id);
+        this.reactivateIfInactive(
+          item,
+          'accounts',
+          this.accountSelect,
+          () => {
+            this.form.config.account_id = null;
+            this.account_currency = null;
+          },
+          () => this.form.config.account_id === Number(item.id),
+        );
+      },
+
+      onInvestmentPicked(item) {
+        this.onInvestmentSelected(item.id);
+        this.reactivateIfInactive(
+          item,
+          'investments',
+          this.investmentSelect,
+          () => {
+            this.form.config.investment_id = null;
+            this.investment_currency = null;
+          },
+          () => this.form.config.investment_id === Number(item.id),
+        );
+      },
+
+      setActive(kind, id, active) {
+        const url =
+          kind === 'investments'
+            ? window.route('api.v1.investments.patch-active', {
+                investment: id,
+              })
+            : window.route('api.v1.account-entities.patch-active', {
+                accountEntity: id,
+              });
+
+        return window.axios
+          .patch(url, { active })
+          .then(() => upsertEntity(kind, { id, active }));
+      },
+
+      reactivateIfInactive(item, kind, select, reset, isStillSelected) {
+        if (item.active !== false) {
+          return;
+        }
+        const id = Number(item.id);
+
+        // Tracked, so onSubmit() can wait for it: restoreReactivated() must see this entity
+        const activation = this.setActive(kind, id, true)
+          .then(() => this.reactivated.push({ id, kind, name: item.text }))
+          .catch(() => {
+            toastHelpers.showErrorToast(
+              __('Could not reactivate :name.', { name: item.text }),
+            );
+            // A newer pick must stay untouched
+            if (isStillSelected()) {
+              select.clear(true);
+              reset();
+            }
+          });
+        this.pendingActivations.push(activation);
+      },
+
+      // Put back the entities reactivated for this transaction, once it is saved
+      restoreReactivated() {
+        if (this.deactivateAfterSave) {
+          this.reactivated.forEach(({ id, kind }) =>
+            this.setActive(kind, id, false).catch(() => {}),
+          );
+        }
+        this.reactivated = [];
+      },
+
+      notifyReactivatedStayActive() {
+        if (this.reactivated.length > 0 && this.deactivateAfterSave) {
+          toastHelpers.showInfoToast(
+            __(
+              'Reactivated items stay active, because the transaction was not saved.',
+            ),
+          );
+        }
       },
 
       getDefaultAccountDetails(account_id) {
@@ -1011,19 +1305,22 @@
           return;
         }
 
-        // Returned so callers can wait for the preset and its currency request to
-        // settle before treating the form as loaded.
-        return window.axios
-          .get('/api/v1/accounts/' + account_id)
-          .then(({ data }) => {
-            setSelected(
-              this.accountSelect,
-              { id: data.id, text: data.name },
-              { silent: true },
-            );
+        // Returned so callers can wait for the preset to settle before treating the form as loaded.
+        return this.selectDataReady.then(() => {
+          const account = this.selectData.accounts.find(
+            (a) => a.id === Number(account_id),
+          );
+          if (!account) {
+            return;
+          }
+          setSelected(
+            this.accountSelect,
+            { id: account.id, text: account.name },
+            { silent: true },
+          );
 
-            return this.onAccountSelected(data.id);
-          });
+          return this.onAccountSelected(account.id);
+        });
       },
 
       getDefaultInvestmentDetails(investment_id) {
@@ -1031,19 +1328,25 @@
           return;
         }
 
-        // Returned so callers can wait for the preset to settle before treating
-        // the form as loaded. The details response already has the full currency.
-        return window.axios
-          .get(route('api.v1.investments.show', { investment: investment_id }))
-          .then(({ data }) => {
-            setSelected(
-              this.investmentSelect,
-              { id: data.id, text: data.name, symbol: data.symbol },
-              { silent: true },
-            );
-            this.form.config.investment_id = data.id;
-            this.investment_currency = data.currency;
-          });
+        return this.selectDataReady.then(() => {
+          const investment = this.selectData.investments.find(
+            (i) => i.id === Number(investment_id),
+          );
+          if (!investment) {
+            return;
+          }
+          setSelected(
+            this.investmentSelect,
+            {
+              id: investment.id,
+              text: investment.name,
+              symbol: investment.symbol,
+            },
+            { silent: true },
+          );
+
+          return this.onInvestmentSelected(investment.id);
+        });
       },
 
       initializeTransaction() {
@@ -1063,11 +1366,16 @@
 
           // Copy configuration (handle both saved transactions and AI drafts)
           const config = this.transaction.config || {};
-          this.form.config.quantity = config.quantity;
-          this.form.config.price = config.price;
-          this.form.config.commission = config.commission;
-          this.form.config.tax = config.tax;
-          this.form.config.dividend = config.dividend;
+          // These may arrive as fixed-scale decimal strings (e.g. "12.5000") - Number()
+          // drops the trailing zeros, the same way MathInput normalizes typed values.
+          ['quantity', 'price', 'commission', 'tax', 'dividend'].forEach(
+            (field) => {
+              const value = config[field];
+              this.form.config[field] = [null, undefined, ''].includes(value)
+                ? value
+                : Number(value);
+            },
+          );
           this.form.config.account_id = config.account_id;
           this.form.config.investment_id = config.investment_id;
 
@@ -1164,6 +1472,7 @@
         // Set form action and AI document ID
         this.form.action = this.action;
         this.form.ai_document_id = this.aiDocumentId;
+        this.form.transaction_template_id = this.transactionTemplateId;
 
         // The originalData snapshot itself is taken once the account/investment details
         // requested by the caller (mounted()/the transaction watcher) have finished
@@ -1178,17 +1487,38 @@
         this.formLoaded = true;
       },
 
-      transactionTypeChanged() {
-        const settings = this.transactionTypeSettings;
-        if (!settings.quantity) {
-          this.form.config.quantity = null;
+      // The select is not v-model bound: the type only changes once the user accepted the data loss
+      transactionTypeChanged(event) {
+        const newType = event.target.value;
+        const settings = this.transactionTypes.find((t) => t.value === newType);
+        const lostFields = ['quantity', 'price', 'dividend'].filter(
+          (field) =>
+            !settings[field] &&
+            ![null, undefined, ''].includes(this.form.config[field]),
+        );
+
+        const apply = () => {
+          this.form.transaction_type = newType;
+          lostFields.forEach((field) => (this.form.config[field] = null));
+        };
+
+        if (lostFields.length === 0) {
+          apply();
+          return;
         }
-        if (!settings.price) {
-          this.form.config.price = null;
-        }
-        if (!settings.dividend) {
-          this.form.config.dividend = null;
-        }
+
+        confirmAction(
+          __(
+            'Are you sure, you want to change the transaction type? Some data might get lost.',
+          ),
+          { icon: 'warning', target: this.swalTargetSelector },
+        ).then((result) => {
+          if (result.isConfirmed) {
+            apply();
+          } else {
+            event.target.value = this.form.transaction_type;
+          }
+        });
       },
 
       loadCallbackUrl(transactionId) {
@@ -1236,15 +1566,17 @@
 
       onCancel() {
         if (!this.isDirty()) {
+          this.notifyReactivatedStayActive();
           this.$emit('cancel');
           return false;
         }
 
         confirmAction(__('Are you sure you want to discard any changes?'), {
           icon: 'warning',
-          target: this.dropdownParentSelector,
+          target: this.swalTargetSelector,
         }).then((result) => {
           if (result.isConfirmed) {
+            this.notifyReactivatedStayActive();
             this.$emit('cancel');
           }
         });
@@ -1261,7 +1593,36 @@
         );
       },
 
-      onSubmit() {
+      // Only the filled fields, in the draft format shared with AI documents (schema v2)
+      buildTemplateDraft() {
+        const config = this.form.config;
+
+        return {
+          schema_version: 2,
+          config_type: 'investment',
+          transaction_type: this.form.transaction_type,
+          ...this.compactDraftPart({ comment: this.form.comment }),
+          config: this.compactDraftPart({
+            account_id: this.draftId(config.account_id),
+            investment_id: this.draftId(config.investment_id),
+            quantity: this.draftDecimal(config.quantity),
+            price: this.draftDecimal(config.price),
+            commission: this.draftDecimal(config.commission),
+            tax: this.draftDecimal(config.tax),
+            dividend: this.draftDecimal(config.dividend),
+          }),
+        };
+      },
+
+      async onSubmit() {
+        // Let in-flight reactivations settle (they never reject; failures clear the selection)
+        await Promise.all(this.pendingActivations);
+
+        if (this.isTemplate) {
+          this.saveTemplate(this.buildTemplateDraft());
+          return;
+        }
+
         // Editing an existing transaction needs PATCH method
         if (this.action === 'edit') {
           this.form
@@ -1272,6 +1633,7 @@
               this.form,
             )
             .then((response) => {
+              this.restoreReactivated();
               this.$emit(
                 'success',
                 processTransaction(response.data.transaction),
@@ -1287,6 +1649,15 @@
         this.form
           .post(this.route('api.v1.transactions.store-investment'), this.form)
           .then(async (response) => {
+            // Count it into the suggestions, so the next entry in this page session ranks correctly
+            if (this.selectData) {
+              applySavedTransaction(this.selectData.usage, {
+                ...response.data.transaction,
+                config_type: 'investment',
+              });
+            }
+            this.restoreReactivated();
+
             // Store price if enabled
             const investmentPriceStoredResult = await this.storePriceIfEnabled(
               response.data.transaction,

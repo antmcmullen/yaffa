@@ -91,6 +91,19 @@ export function dataTablesActionButton(id, action, params = {}) {
         '"><i class="fa fa-fw fa-clone"></i></a> '
       );
     },
+    template() {
+      return (
+        '<a href="' +
+        route('transaction.open', {
+          transaction: id,
+          action: 'template',
+          ...params,
+        }) +
+        '" class="btn btn-xs btn-primary" title="' +
+        __('Save as template') +
+        '"><i class="fa fa-fw fa-bookmark"></i></a> '
+      );
+    },
     replace() {
       return (
         '<a href="' +
@@ -124,7 +137,7 @@ export function dataTablesActionButton(id, action, params = {}) {
                     class="btn btn-xs btn-success"
                     title="${__('Edit and insert instance')}"
                 >
-                    <i class="fa fa-fw fa-pencil"></i>
+                    <i class="fa fa-fw fa-calendar-plus"></i>
                 </a> `;
     },
   };
@@ -299,7 +312,7 @@ export function transactionTypeIcon(transactionType, customTitle) {
 
 export function muteCellWithValue(column, mutedValue) {
   if (column.text() === mutedValue) {
-    column.addClass('text-muted text-italic');
+    column.addClass('not-set');
   }
 }
 

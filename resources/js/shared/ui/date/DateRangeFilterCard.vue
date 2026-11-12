@@ -87,16 +87,8 @@
 
 <script>
   import { __ } from '@/shared/lib/i18n';
+  import { toIsoDateString } from '@/shared/lib/helpers';
   import presetCalculators from '@/shared/lib/date/presetDates';
-
-  function formatDate(date) {
-    if (!date) return null;
-    const d = date instanceof Date ? date : new Date(date);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }
 
   function findPresetOption(groups, preset) {
     if (!preset || preset === 'none') {
@@ -175,8 +167,8 @@
       if (!dateFrom && !dateTo && preset !== 'none') {
         const dates = resolvePresetDates(preset, this.presetGroups);
         if (dates) {
-          dateFrom = formatDate(dates.start);
-          dateTo = formatDate(dates.end);
+          dateFrom = toIsoDateString(dates.start);
+          dateTo = toIsoDateString(dates.end);
         }
       }
 
@@ -244,8 +236,8 @@
           this.presetGroups,
         );
         if (dates) {
-          this.dateFrom = formatDate(dates.start);
-          this.dateTo = formatDate(dates.end);
+          this.dateFrom = toIsoDateString(dates.start);
+          this.dateTo = toIsoDateString(dates.end);
         } else {
           this.dateFrom = null;
           this.dateTo = null;

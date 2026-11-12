@@ -58,7 +58,7 @@
                 <img src="{{ asset('images/logo-small.png')}}" alt="YAFFA Logo">
             </a>
             @env('local')
-                <span id="breakpoint-label" class="badge bg-info ms-3" style="align-self: center;">Loading...</span>
+                <span id="breakpoint-label" class="badge bg-info ms-3" style="align-self: center;">Loading</span>
             @endenv
             <ul class="header-nav ms-auto"></ul>
             <ul class="header-nav ms-3 me-4">
@@ -66,7 +66,8 @@
                     <a class="nav-link py-0" data-coreui-toggle="dropdown" href="#" role="button" aria-haspopup="true"
                         aria-expanded="false">
                         <i class="fa-solid fa-user me-1"></i>
-                        {{ Auth::user()->name }}
+                        <span class="d-none d-md-inline">{{ Auth::user()->name }}</span>
+                        <span class="visually-hidden d-md-none">{{ Auth::user()->name }}</span>
                     </a>
                     <div class="dropdown-menu dropdown-menu-end pt-0">
                         <a class="dropdown-item" href="{{ route('user.settings') }}">

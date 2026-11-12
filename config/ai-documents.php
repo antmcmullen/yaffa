@@ -7,8 +7,7 @@ return [
     'file_upload' => [
         'max_files_per_submission' => env('AI_DOCUMENT_MAX_FILES_PER_SUBMISSION', 5),
         'max_file_size_mb' => env('AI_DOCUMENT_MAX_FILE_SIZE_MB', 20),
-        // This is a restrictive default. Adjust as needed, but be cautious about allowing too many types for security reasons.
-        'allowed_types' => explode(',', env('AI_DOCUMENT_ALLOWED_TYPES', 'txt'))
+        'allowed_types' => explode(',', env('AI_DOCUMENT_ALLOWED_TYPES', 'pdf,jpg,jpeg,png,txt'))
     ],
 
     /*
@@ -19,14 +18,18 @@ return [
             'name' => 'OpenAI',
             'supported' => true,
             'models' => [
+                // DEPRECATED: OpenAI retires gpt-4o and gpt-4o-mini (and gpt-4.1 / gpt-4.1-mini) on 2027-01-14.
+                // Remove these entries after that date. Until then `supported => false` only hides them for
+                // new selections; existing configurations keep working.
                 'gpt-4o-mini' => [
                     'vision' => true,
-                    'supported' => true,
+                    'supported' => false,
                 ],
                 'gpt-4o' => [
                     'vision' => true,
-                    'supported' => true,
+                    'supported' => false,
                 ],
+                // Currently supported OpenAI models
                 'gpt-5.6-luna' => [
                     'vision' => true,
                     'supported' => true,
@@ -41,14 +44,16 @@ return [
             'name' => 'Google Gemini',
             'supported' => true,
             'models' => [
+                // DEPRECATED: Gemini 2.5 Flash and 2.5 Pro will be deprecated and auto-redirected on December 1, 2026
                 'gemini-2.5-flash' => [
                     'vision' => true,
-                    'supported' => true,
+                    'supported' => false,
                 ],
                 'gemini-2.5-pro' => [
                     'vision' => true,
-                    'supported' => true,
+                    'supported' => false,
                 ],
+                // Currently supported Gemini models
                 'gemini-3.5-flash-lite' => [
                     'vision' => true,
                     'supported' => true,

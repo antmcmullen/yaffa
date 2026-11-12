@@ -46,11 +46,39 @@ function standardStandaloneSave(object $page, string $callback): void
 
 function standardStandaloneSwitchType(object $page, string $type): void
 {
+    // A type change recreates the account/payee select of every side whose kind changes (account <-> payee).
+    // Wait for the new instances, or a following search could hit the old, soon-destroyed one.
+    $oldType = $page->script("() => document.querySelector('[dusk^=\"transaction-type-\"].active').getAttribute('dusk').replace('transaction-type-', '')");
+    $kinds = ['withdrawal' => ['account', 'payee'], 'deposit' => ['payee', 'account'], 'transfer' => ['account', 'account']];
+    $page->script('() => { window.__oldSelects = { from: account_from.tomselect, to: account_to.tomselect }; }');
+
+    // The form only asks for confirmation when the change discards something: a selected account/payee on a side
+    // whose kind changes, or any item when moving to transfer
+    $losesData = $type === 'transfer' && $page->script("() => document.querySelectorAll('#transaction_item_container .transaction_item_row').length") > 0;
+    foreach (['from', 'to'] as $i => $side) {
+        $losesData = $losesData || ($kinds[$oldType][$i] !== $kinds[$type][$i]
+            && $page->script("() => !!account_{$side}.tomselect.getValue()"));
+    }
+
     $page->click("[dusk=\"transaction-type-{$type}\"]");
-    test()->confirmSwal($page);
+    if ($losesData) {
+        test()->confirmSwal($page);
+        // SweetAlert hands focus back to the clicked button shortly after closing; a dropdown opened before that
+        // would lose focus and close again
+        test()->waitUntil($page, "document.activeElement === document.querySelector('[dusk=\"transaction-type-{$type}\"]')");
+    } else {
+        $page->assertNotPresent('.swal2-popup');
+    }
+
+    foreach (['from', 'to'] as $i => $side) {
+        if ($kinds[$oldType][$i] !== $kinds[$type][$i]) {
+            test()->waitUntil($page, "document.querySelector('#account_{$side}').tomselect && document.querySelector('#account_{$side}').tomselect !== window.__oldSelects.{$side}");
+        }
+    }
+    test()->waitUntil($page, "document.querySelector('[dusk=\"transaction-type-{$type}\"]').classList.contains('active')");
 }
 
-const STANDARD_FORM_SAVED = "document.querySelector('#BootstrapNotificationContainer')?.textContent.includes('Transaction added')";
+const STANDARD_FORM_SAVED = "document.querySelector('.toast-container')?.textContent.includes('Transaction added')";
 
 it('loads the standard transaction form', function () {
     $page = visit(route('transaction.create', ['type' => 'standard']));
@@ -267,7 +295,7 @@ it('adds multiple transaction items')->todo();
 it('adds a new payee through the modal and uses it', function () {
     $category = Category::factory()->create([
         'user_id' => $this->user->id,
-        'parent_id' => Category::inRandomOrder()->parentCategory()->first()->id,
+        'parent_id' => Category::where('user_id', $this->user->id)->parentCategory()->inRandomOrder()->first()->id,
         'active' => true,
     ]);
 

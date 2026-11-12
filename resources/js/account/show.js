@@ -219,7 +219,7 @@ let dtHistory = $(selectorHistoryTable).DataTable({
 
     // Mute category cell with 'not set' value
     if (data.config_type === 'standard' && data.categories.length === 0) {
-      $('td', row).eq(3).addClass('text-muted text-italic');
+      $('td', row).eq(3).addClass('not-set');
     }
   },
   initComplete: function () {
@@ -316,7 +316,10 @@ dtHistory.contextualActions({
       action: function (row) {
         dataTableHelpers
           .deleteTransactionRow(selectorHistoryTable, row[0].id)
-          .then(getAccountBalance)
+          .then(() => {
+            getAccountBalance();
+            getInvestmentHoldings();
+          })
           .catch(() => {});
       },
     },
@@ -367,7 +370,8 @@ let dtSchedule = $(selectorScheduleTable).DataTable({
     },
   ],
   /**
-   * Callback for every row created: colorize the next date.
+   * Callback for every row draw: colorize the row by next date.
+   * Runs on each draw (unlike createdRow), so classes stay correct after a row's data changes.
    *
    * @param {Node} row
    * @param {Object} data
@@ -375,8 +379,8 @@ let dtSchedule = $(selectorScheduleTable).DataTable({
    * @property {Date} data.transaction_schedule.next_date
    * @returns {void}
    */
-  createdRow: function (row, data) {
-    $(row).attr('data-id', data.id);
+  rowCallback: function (row, data) {
+    const $row = $(row).removeClass('table-danger table-warning');
 
     // This data is required, but just to be on the safe side, let's validate it
     if (data.transaction_schedule.next_date) {
@@ -384,14 +388,24 @@ let dtSchedule = $(selectorScheduleTable).DataTable({
         data.transaction_schedule.next_date <
         new Date(new Date().setHours(0, 0, 0, 0))
       ) {
-        $(row).addClass('table-danger');
+        $row.addClass('table-danger');
       } else if (
         data.transaction_schedule.next_date <
         new Date(new Date().setHours(24, 0, 0, 0))
       ) {
-        $(row).addClass('table-warning');
+        $row.addClass('table-warning');
       }
     }
+  },
+  /**
+   * Callback for every row created: row and column specific formatting.
+   *
+   * @param {Node} row
+   * @param {Object} data
+   * @returns {void}
+   */
+  createdRow: function (row, data) {
+    $(row).attr('data-id', data.id);
 
     // Color coding for the amount column
     if (data.current_cash_flow > 0) {
@@ -402,7 +416,7 @@ let dtSchedule = $(selectorScheduleTable).DataTable({
 
     // Mute category cell with 'not set' value
     if (data.categories.length === 0) {
-      $('td', row).eq(2).addClass('text-muted text-italic');
+      $('td', row).eq(2).addClass('not-set');
     }
   },
   initComplete: function () {
@@ -450,7 +464,7 @@ dtSchedule.contextualActions({
     {
       type: 'option',
       title: __('Adjust and enter instance'),
-      iconClass: 'fa fa-pencil',
+      iconClass: 'fa fa-calendar-plus',
       contextMenuClasses: ['text-success fw-bold'],
       action: function (row) {
         // TODO: should this data be passed back and forth instead of storing it?
@@ -670,6 +684,72 @@ let getAccountBalance = function () {
   );
 };
 getAccountBalance();
+// Investment holdings card: hidden unless the account has holdings
+let holdingsRequestId = 0;
+const getInvestmentHoldings = function () {
+  const card = document.getElementById('investmentHoldingsCard');
+  const list = document.getElementById('investmentHoldingsList');
+  const total = document.getElementById('investmentHoldingsTotal');
+  const locale = window.YAFFA.userSettings.locale;
+
+  list.innerHTML =
+    '<li class="list-group-item"><i class="fa fa-fw fa-spinner fa-spin"></i></li>';
+
+  // Ignore responses of superseded requests
+  const requestId = ++holdingsRequestId;
+
+  axios
+    .get(window.route('api.v1.accounts.investments', window.account.id))
+    .then((response) => {
+      if (requestId !== holdingsRequestId) return;
+      list.replaceChildren();
+      // Display-only sum; rows without a price are excluded
+      total.textContent = toFormattedCurrency(
+        response.data
+          .reduce((sum, item) => sum.plus(item.value ?? 0), new Decimal(0))
+          .toString(),
+        locale,
+        window.account.config.currency,
+      );
+      card.classList.toggle('d-none', response.data.length === 0);
+
+      response.data.forEach((item) => {
+        const li = document.createElement('li');
+        li.className =
+          'list-group-item d-flex justify-content-between align-items-start';
+
+        const link = document.createElement('a');
+        link.href = window.route('investments.show', {
+          investment: item.investment_id,
+          account: window.account.id,
+        });
+        link.textContent = item.name;
+
+        const value = document.createElement('span');
+        if (item.value === null) {
+          value.className = 'not-set';
+          value.textContent = __('Not set');
+        } else {
+          value.textContent = toFormattedCurrency(
+            item.value,
+            locale,
+            window.account.config.currency,
+          );
+        }
+
+        li.append(link, value);
+        list.append(li);
+      });
+    })
+    .catch((error) => {
+      if (requestId !== holdingsRequestId) return;
+      total.textContent = '';
+      card.classList.remove('d-none');
+      list.innerHTML = `<li class="list-group-item"><i class="text-danger fa-solid fa-triangle-exclamation" title="${__('Error while retrieving data')}"></i></li>`;
+      toastHelpers.showErrorToast(error.message);
+    });
+};
+getInvestmentHoldings();
 
 // Reconciled button listener
 $(selectorHistoryTable).on('click', 'i.reconcile', function () {
@@ -1269,6 +1349,9 @@ window.addEventListener('transaction-created', function (event) {
 
   // Add the newly created transaction to the history table, regardless if the date range and account matches
   dtHistory.row.add(transaction).draw();
+
+  // Holdings are computed live, so they can refresh immediately
+  getInvestmentHoldings();
 
   // Reload the account balance with a static delay
   setTimeout(getAccountBalance, 15000);

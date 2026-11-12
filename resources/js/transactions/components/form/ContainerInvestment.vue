@@ -4,15 +4,17 @@
     :initial-callback="callback"
     :transaction="transactionData"
     :ai-document-id="aiDocumentId"
+    :template-info="templateInfo"
+    :transaction-template-id="transactionTemplateId"
     :simplified="isSimplified"
-    :dropdown-parent-selector="'body'"
+    :swal-target-selector="'body'"
     @cancel="onCancel"
     @success="onSuccess"
   ></transaction-form-investment>
 </template>
 
 <script>
-  import { storeNotification } from '@/shared/lib/notifications/handleNotifications';
+  import { storeToast } from '@/shared/lib/notifications/handleNotifications';
   import { processTransaction } from '@/shared/lib/helpers';
   import TransactionFormInvestment from './TransactionFormInvestment.vue';
 
@@ -44,6 +46,16 @@
         }),
       },
       aiDocumentId: {
+        type: Number,
+        default: null,
+      },
+      // The template being edited (action "template"): {id, name, is_featured, notices}
+      templateInfo: {
+        type: Object,
+        default: null,
+      },
+      // The template a new transaction is created from
+      transactionTemplateId: {
         type: Number,
         default: null,
       },
@@ -87,7 +99,7 @@
 
     computed: {
       isSimplified() {
-        return this.action === 'enter';
+        return ['enter', 'template'].includes(this.action);
       },
     },
 
@@ -96,6 +108,11 @@
     methods: {
       // Decide how to proceed on success
       loadCallbackUrl(transaction) {
+        if (this.callback === 'returnToAiDocuments') {
+          location.href = this.route('ai-documents.index');
+          return;
+        }
+
         if (this.callback === 'returnToDashboard') {
           location.href = this.route('home');
           return;
@@ -151,50 +168,46 @@
         window.history.back();
       },
 
+      // A template was saved: it has no follow-up options, so go back to the list
+      onTemplateSaved(template) {
+        storeToast(
+          'success',
+          __('Template saved (:name)', { name: template.name }),
+        );
+        location.href = this.route('transaction-templates.index');
+      },
+
       // Actual form was submitted. We need to proceed to the screen selected by the user.
       onSuccess(transaction, options) {
+        if (this.action === 'template') {
+          return this.onTemplateSaved(transaction);
+        }
+
         if (['create', 'clone', 'enter', 'finalize'].includes(this.action)) {
-          storeNotification(
+          storeToast(
             'success',
             __('Transaction added (#:id)', { id: transaction.id }),
-            {
-              dismissible: true,
-            },
           );
 
           // Check if investment price was stored
           if (options.investmentPriceStoredResult) {
             if (options.investmentPriceStoredResult === 'success') {
-              storeNotification('success', __('Investment price stored'), {
-                dismissible: true,
-              });
+              storeToast('success', __('Investment price stored'));
             } else if (options.investmentPriceStoredResult === 'skipped') {
-              storeNotification(
+              storeToast(
                 'warning',
                 __('Price for this date already exists and was not updated'),
-                {
-                  dismissible: true,
-                },
               );
             } else if (options.investmentPriceStoredResult === 'error') {
-              storeNotification(
-                'error',
-                __('Failed to store investment price'),
-                {
-                  dismissible: true,
-                },
-              );
+              storeToast('error', __('Failed to store investment price'));
             }
           }
         } else {
-          storeNotification(
+          storeToast(
             'success',
             __('Transaction updated (#:id)', {
               id: transaction.id,
             }),
-            {
-              dismissible: true,
-            },
           );
         }
 

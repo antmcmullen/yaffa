@@ -81,13 +81,10 @@
                     {{ __('Opening balance') }}
                 </label>
                 <div class="col-sm-9">
-                    <input
-                        class="form-control"
-                        id="opening_balance"
-                        name="config[opening_balance]"
-                        type="text"
-                        value="{{ old('config.opening_balance', ($account ?? null)?->config?->opening_balance?->getAmount()->strippedOfTrailingZeros() ?? '' ) }}"
-                    >
+                    <div
+                        id="opening-balance"
+                        data-value="{{ old('config.opening_balance', ($account ?? null)?->config?->opening_balance?->getAmount()->strippedOfTrailingZeros() ?? '' ) }}"
+                    ></div>
                 </div>
             </div>
 
@@ -215,7 +212,7 @@
                         <select
                             class="form-select"
                             id="preferred_file_import_profile_id"
-                            name="preferred_file_import_profile_id"
+                            name="config[preferred_file_import_profile_id]"
                         >
                             <option value="">{{ __('— None —') }}</option>
                             @foreach ($allFileImportProfiles->groupBy('file_type') as $fileType => $profiles)
@@ -224,11 +221,11 @@
                                         <option
                                             value="{{ $profile->id }}"
                                             @if (old())
-                                                @if (old('preferred_file_import_profile_id') == $profile->id)
+                                                @if (old('config.preferred_file_import_profile_id') == $profile->id)
                                                     selected="selected"
                                                 @endif
                                             @elseif(isset($account))
-                                                @if (($account->preferred_file_import_profile_id ?? null) == $profile->id)
+                                                @if (($account->config->preferred_file_import_profile_id ?? null) == $profile->id)
                                                     selected="selected"
                                                 @endif
                                             @endif

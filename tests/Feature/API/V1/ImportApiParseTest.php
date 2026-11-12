@@ -141,8 +141,8 @@ CSV;
         $systemProfile = $this->createSystemProfile();
         $accountEntity = $this->createAccountEntity($user);
 
-        $accountEntity->preferred_file_import_profile_id = $systemProfile->id;
-        $accountEntity->save();
+        $accountEntity->config->preferred_file_import_profile_id = $systemProfile->id;
+        $accountEntity->config->save();
 
         $csv = <<<'CSV'
 Értéknap;Összeg;Típus;Közlemény/1;Közlemény/2;Közlemény/3
@@ -300,7 +300,8 @@ CSV;
             ]);
 
         $response->assertUnprocessable();
-        $response->assertJsonMissingPath('error');
+        // A plain validation failure: must not reveal that the profile exists (no NOT_FOUND/FORBIDDEN code)
+        $response->assertJsonPath('error.code', 'VALIDATION_ERROR');
     }
 
     public function test_csv_parse_returns_422_for_nonexistent_profile_id(): void

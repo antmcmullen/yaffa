@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\AiDocumentStatus;
 use App\Enums\TransactionType as TransactionTypeEnum;
 use App\Http\Traits\ValidatesRecurrenceRule;
 use App\Models\Account;
@@ -36,6 +37,8 @@ class TransactionRequest extends FormRequest
             // Standard fields
             'config.amount_to' => __('amount to'),
             'ai_document_id' => __('AI document'),
+            'close_ai_document_id' => __('AI document to close'),
+            'transaction_template_id' => __('transaction template'),
             // Schedule fields
             'schedule_config.start_date' => __('schedule start date'),
             'schedule_config.next_date' => __('schedule next date'),
@@ -186,6 +189,22 @@ class TransactionRequest extends FormRequest
             'catch_up_schedule' => 'boolean',
             'config_type' => 'required|in:standard,investment',
 
+            // Optional template the transaction was created from, only used for its usage statistics
+            'transaction_template_id' => [
+                'nullable',
+                Rule::exists('transaction_templates', 'id')->where('user_id', $this->user()->id),
+            ],
+
+            // Optional open AI document the user closes as a duplicate of this transaction
+            'close_ai_document_id' => [
+                'nullable',
+                'different:ai_document_id',
+                Rule::exists('ai_documents', 'id')->where(function ($query) {
+                    $query->where('user_id', $this->user()->id)
+                        ->whereIn('status', AiDocumentStatus::values(AiDocumentStatus::open()));
+                }),
+            ],
+
             // Optional AI document association - exists, owned by the user, and not already finalized
             'ai_document_id' => [
                 'nullable',
@@ -197,7 +216,7 @@ class TransactionRequest extends FormRequest
         ];
 
         // Set date and schedule related rules
-        if ($this->get('schedule')) {
+        if ($this->input('schedule')) {
             $rules = array_merge($rules, [
                 'reconciled' => [
                     'boolean',
@@ -318,7 +337,7 @@ class TransactionRequest extends FormRequest
         }
 
         // Adjustments based on transaction type
-        if ($this->get('config_type') === 'standard') {
+        if ($this->input('config_type') === 'standard') {
             //any standard transactions have common rules for items
             $rules = array_merge($rules, [
                 'items' => 'array',
@@ -346,7 +365,7 @@ class TransactionRequest extends FormRequest
             ]);
 
             // Adjust detail related rules, based on transaction type
-            if ($this->get('transaction_type') === 'withdrawal') {
+            if ($this->input('transaction_type') === 'withdrawal') {
                 $rules = array_merge($rules, [
                     'config.account_from_id' => [
                         'required',
@@ -379,7 +398,7 @@ class TransactionRequest extends FormRequest
                     'remaining_payee_default_category_id' => ['nullable', $ownedCategoryRule],
 
                 ]);
-            } elseif ($this->get('transaction_type') === 'deposit') {
+            } elseif ($this->input('transaction_type') === 'deposit') {
                 $rules = array_merge($rules, [
                     'config.account_from_id' => [
                         'required',
@@ -412,7 +431,7 @@ class TransactionRequest extends FormRequest
                     'remaining_payee_default_category_id' => ['nullable', $ownedCategoryRule],
 
                 ]);
-            } elseif ($this->get('transaction_type') === 'transfer') {
+            } elseif ($this->input('transaction_type') === 'transfer') {
                 $rules = array_merge($rules, [
                     'config.account_from_id' => [
                         'required',
@@ -440,7 +459,7 @@ class TransactionRequest extends FormRequest
                     ],
                 ]);
             }
-        } elseif ($this->get('config_type') === 'investment') {
+        } elseif ($this->input('config_type') === 'investment') {
             // Adjust detail related rules, based on transaction type
             $rules = array_merge($rules, [
                 'config.account_id' => [
