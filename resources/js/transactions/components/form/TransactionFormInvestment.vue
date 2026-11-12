@@ -617,7 +617,6 @@
     searchEntities,
     applySavedTransaction,
   } from '@/shared/lib/select-data';
-  import * as toastHelpers from '@/shared/lib/toast';
 
   export default {
     components: {
