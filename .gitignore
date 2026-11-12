@@ -55,3 +55,6 @@ Homestead.yaml
 
 # Pest browser plugin screenshots (path is fixed by the plugin)
 /tests/Browser/Screenshots
+
+# graphify knowledge-graph output (local tooling, never commit)
+graphify-out/
