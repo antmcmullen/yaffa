@@ -247,7 +247,7 @@ class InvestmentApiControllerTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('investment.id', $investment->id)
-            ->assertJsonPath('investment.current_quantity', 0)
+            ->assertJsonPath('investment.current_quantity', '0.0000000000')
             ->assertJsonPath('investment.latest_price', 100.5);
 
         $prices = $response->json('prices');
