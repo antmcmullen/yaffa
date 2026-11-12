@@ -52,7 +52,7 @@
   import {
     __,
     toFormattedCurrency,
-    toFormattedNumber,
+    toFormattedQuantity,
   } from '@/shared/lib/i18n';
   import * as toastHelpers from '@/shared/lib/toast';
   import FullCalendar from '@fullcalendar/vue3';
@@ -243,7 +243,7 @@
           }
 
           if (quantity !== null && quantity !== undefined) {
-            label += `\n${this.__('Quantity')}: ${toFormattedNumber(quantity, this.locale)}`;
+            label += `\n${this.__('Quantity')}: ${toFormattedQuantity(quantity, this.locale)}`;
           }
 
           return label;

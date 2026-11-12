@@ -6,7 +6,7 @@ import am4themes_kelly from '@amcharts/amcharts4/themes/kelly';
 am4core.useTheme(am4themes_animated);
 am4core.useTheme(am4themes_kelly);
 
-import { __, toFormattedCurrency, toFormattedNumber } from '@/shared/lib/i18n';
+import { __, toFormattedCurrency, toFormattedQuantity } from '@/shared/lib/i18n';
 import {
   applyAmChartsColorTheme,
   COLOR_MODE_EVENT,
@@ -172,13 +172,9 @@ fetch('/api/v1/investments/timeline')
     window.chartData = data.map(function (item) {
       item.value = item.quantity * item.last_price;
 
-      item.formatted_quantity = toFormattedNumber(
+      item.formatted_quantity = toFormattedQuantity(
         item.quantity,
         window.YAFFA.userSettings.locale,
-        {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 4,
-        },
       );
       item.formatted_value = toFormattedCurrency(
         item.value,
