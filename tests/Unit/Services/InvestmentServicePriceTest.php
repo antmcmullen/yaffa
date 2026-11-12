@@ -416,13 +416,13 @@ class InvestmentServicePriceTest extends TestCase
         $this->assertSame(152.5, $batchResults[$service->priceBatchKey($investment->id, $asOf)]);
     }
 
-    public function test_combined_price_uses_latest_id_for_same_day_records_and_prefers_trade_on_tie(): void
+    public function test_combined_price_uses_latest_trade_id_for_same_day_records_and_prefers_trade_on_tie(): void
     {
         $user = User::factory()->create();
         $investment = Investment::factory()->for($user)->withUser($user)->create();
         $account = AccountEntity::factory()->asAccount($user)->create();
 
-        InvestmentPrice::factory()->for($investment)->create(['date' => '2024-01-15', 'price' => 10]);
+        // investment_prices is unique per (date, investment_id), so only one stored price can share the day.
         InvestmentPrice::factory()->for($investment)->create(['date' => '2024-01-15', 'price' => 20]);
         Transaction::factory()
             ->for($user)
