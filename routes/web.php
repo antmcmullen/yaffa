@@ -121,6 +121,9 @@ Route::get('/transaction-templates/{template}/edit', [TransactionTemplateControl
  * Report related routes
  ******************/
 Route::get('/reports/cashflow', [ReportController::class, 'cashFlow'])->name('reports.cashflow');
+Route::view('/reports/portfolio-valuation', 'reports.portfolio-valuation')
+    ->middleware(['auth', 'verified'])
+    ->name('reports.portfolio-valuation');
 Route::get('/reports/budgetchart', [ReportController::class, 'budgetChart'])->name('reports.budgetchart');
 Route::get('/reports/schedule', [ReportController::class, 'getSchedules'])->name('report.schedules');
 Route::get('/reports/advanced-reconcile', [ReportController::class, 'advancedReconcile'])

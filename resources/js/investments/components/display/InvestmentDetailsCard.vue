@@ -88,15 +88,15 @@
         <dt class="col-7 col-sm-8">{{ __('Latest owned value') }}</dt>
         <dd
           class="col-5 col-sm-4 text-end text-break"
-          :class="{ 'not-set': investment.latest_price == null }"
+          :class="{ 'not-set': latestOwnedValue == null }"
         >
-          <template v-if="investment.latest_price == null">
+          <template v-if="latestOwnedValue == null">
             {{ __('Not set') }}
           </template>
           <template v-else>
             {{
               toFormattedCurrency(
-                investment.current_quantity * investment.latest_price,
+                latestOwnedValue,
                 locale,
                 investment.currency,
               )
@@ -114,6 +114,7 @@
     toFormattedCurrency,
     toFormattedQuantity,
   } from '@/shared/lib/i18n';
+  import { getInvestmentValue } from '@/investments/lib/valuation';
 
   export default {
     name: 'InvestmentDetailsCard',
@@ -127,6 +128,14 @@
       return {
         locale: window.YAFFA.userSettings.locale,
       };
+    },
+    computed: {
+      latestOwnedValue() {
+        return getInvestmentValue(
+          this.investment.current_quantity,
+          this.investment.latest_price,
+        );
+      },
     },
     methods: {
       toFormattedCurrency,

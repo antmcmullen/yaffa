@@ -97,6 +97,38 @@ test('summary uses stored prices for investments without transactions', function
         ->assertJsonPath('data.0.quantity', '0.0000000000');
 });
 
+test('summary, single and batch prices agree on same-day trade precedence and ordering', function () {
+    $user = User::factory()->create();
+    $investment = Investment::factory()->withUser($user)->create(['active' => true]);
+    $attributes = ['investment_id' => $investment->id, 'quantity' => 1];
+    Transaction::factory()->buy($user, array_merge($attributes, ['price' => 30]))
+        ->create(['date' => '2025-01-10']);
+    Transaction::factory()->buy($user, array_merge($attributes, ['price' => 40]))
+        ->create(['date' => '2025-01-10']);
+    InvestmentPrice::factory()->for($investment)->create(['date' => '2025-01-10', 'price' => 50]);
+    Sanctum::actingAs($user, ['read']);
+
+    $this->getJson(route('api.v1.investments.summary'))->assertOk()
+        ->assertJsonPath('data.0.price', fn ($p) => is_string($p) && (float) $p === 40.0);
+
+    $service = app(InvestmentService::class);
+    $date = Carbon\Carbon::parse('2025-01-10');
+    expect($service->getLatestPrice($investment, 'combined', $date))->toBe(40.0)
+        ->and($service->getLatestPricesBatch(collect([
+            ['investment' => $investment, 'date' => $date],
+        ]))[$service->priceBatchKey($investment->id, $date)])->toBe(40.0);
+});
+
+test('summary preserves known zero prices', function () {
+    $user = User::factory()->create();
+    $investment = Investment::factory()->withUser($user)->create(['active' => true]);
+    InvestmentPrice::factory()->for($investment)->create(['date' => '2025-01-10', 'price' => 0]);
+    Sanctum::actingAs($user, ['read']);
+
+    $this->getJson(route('api.v1.investments.summary'))->assertOk()
+        ->assertJsonPath('data.0.price', fn ($p) => is_string($p) && (float) $p === 0.0);
+});
+
 test('summary query count stays constant as investments are added', function () {
     $user = User::factory()->create();
     Investment::factory()->withUser($user)->create(['active' => true]);

@@ -39,6 +39,7 @@
             type="date"
             class="form-control"
             :min="dateFromString"
+            :max="todayString"
           />
         </div>
       </div>
@@ -134,19 +135,10 @@
   import { toFormattedCurrency, toFormattedQuantity } from '@/shared/lib/i18n';
   import * as toastHelpers from '@/shared/lib/toast';
   import { getTransactionTypeConfig } from '@/shared/lib/helpers';
-  import { computeInvestmentReturn } from '@/investments/lib/investmentReturn';
-
-  // The default/reset range starts at the earliest recorded transaction and always ends today -
-  // not at the latest transaction, which could be in the past (no recent activity) or a future
-  // scheduled instance (a projection, not a result).
-  function computeDateBounds(transactions) {
-    const allDates = transactions.map((t) => new Date(t.date));
-
-    return {
-      from: allDates.length ? new Date(Math.min(...allDates)) : new Date(),
-      to: new Date(),
-    };
-  }
+  import {
+    computeDateBounds,
+    computeInvestmentReturn,
+  } from '@/investments/lib/investmentReturn';
 
   export default {
     name: 'ResultsCard',
@@ -171,6 +163,9 @@
       };
     },
     computed: {
+      todayString() {
+        return new Date().toISOString().slice(0, 10);
+      },
       dateFromString: {
         get() {
           return this.internalDateFrom
@@ -207,8 +202,13 @@
         },
         set(val) {
           if (!val) return;
-
-          const d = new Date(val);
+          let d = new Date(val);
+          if (val > this.todayString) {
+            toastHelpers.showWarningToast(
+              this.__('Historical results cannot end in the future.'),
+            );
+            d = new Date(this.todayString);
+          }
           if (this.internalDateFrom && d < this.internalDateFrom) {
             toastHelpers.showWarningToast(
               this.__('The end date cannot be before the start date.'),
@@ -288,10 +288,23 @@
         this.resetDates();
       },
       dateFrom(val) {
-        if (val) this.internalDateFrom = val;
+        if (!val) return;
+        const dateFrom =
+          val.toISOString().slice(0, 10) > this.todayString
+            ? new Date(this.todayString)
+            : val;
+        this.internalDateFrom = dateFrom;
+        if (dateFrom !== val) this.$emit('update:date-from', dateFrom);
       },
       dateTo(val) {
-        if (val) this.internalDateTo = val;
+        if (!val) return;
+        if (val.toISOString().slice(0, 10) > this.todayString) {
+          const today = new Date(this.todayString);
+          this.internalDateTo = today;
+          this.$emit('update:date-to', today);
+          return;
+        }
+        this.internalDateTo = val;
       },
       internalDateFrom(val) {
         if (

@@ -86,6 +86,11 @@
                 text="{{ __('Cash flow') }}"
             />
             <x-nav-link
+                href="{{ route('reports.portfolio-valuation') }}"
+                iconClasses="fa-solid fa-chart-pie"
+                text="{{ __('Portfolio valuation') }}"
+            />
+            <x-nav-link
                 href="{{ route('reports.advanced-reconcile') }}"
                 iconClasses="fa-solid fa-scale-balanced"
                 text="{{ __('Advanced reconcile') }}"

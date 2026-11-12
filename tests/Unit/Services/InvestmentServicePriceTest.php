@@ -389,6 +389,60 @@ class InvestmentServicePriceTest extends TestCase
         $this->assertEquals(150.25, $price);
     }
 
+    public function test_combined_price_uses_latest_eligible_source_and_excludes_future_prices(): void
+    {
+        $user = User::factory()->create();
+        $investment = Investment::factory()->for($user)->withUser($user)->create();
+        $account = AccountEntity::factory()->asAccount($user)->create();
+
+        InvestmentPrice::factory()->for($investment)->create(['date' => '2024-01-15', 'price' => 150.25]);
+        InvestmentPrice::factory()->for($investment)->create(['date' => '2024-01-20', 'price' => 999.00]);
+        Transaction::factory()
+            ->for($user)
+            ->for(TransactionDetailInvestment::factory()->for($investment)->for($account, 'account')->state(['price' => 152.50]), 'config')
+            ->create(['date' => '2024-01-16', 'transaction_type' => 'buy', 'schedule' => false]);
+        Transaction::factory()
+            ->for($user)
+            ->for(TransactionDetailInvestment::factory()->for($investment)->for($account, 'account')->state(['price' => 999.00]), 'config')
+            ->create(['date' => '2024-01-21', 'transaction_type' => 'buy', 'schedule' => false]);
+
+        $service = $this->createService(new InvestmentPriceProviderRegistry());
+        $asOf = Carbon::parse('2024-01-17');
+
+        $this->assertSame(152.5, $service->getLatestPrice($investment, 'combined', $asOf));
+        $batchResults = $service->getLatestPricesBatch(collect([
+            ['investment' => $investment, 'date' => $asOf],
+        ]));
+        $this->assertSame(152.5, $batchResults[$service->priceBatchKey($investment->id, $asOf)]);
+    }
+
+    public function test_combined_price_uses_latest_id_for_same_day_records_and_prefers_trade_on_tie(): void
+    {
+        $user = User::factory()->create();
+        $investment = Investment::factory()->for($user)->withUser($user)->create();
+        $account = AccountEntity::factory()->asAccount($user)->create();
+
+        InvestmentPrice::factory()->for($investment)->create(['date' => '2024-01-15', 'price' => 10]);
+        InvestmentPrice::factory()->for($investment)->create(['date' => '2024-01-15', 'price' => 20]);
+        Transaction::factory()
+            ->for($user)
+            ->for(TransactionDetailInvestment::factory()->for($investment)->for($account, 'account')->state(['price' => 30]), 'config')
+            ->create(['date' => '2024-01-15', 'transaction_type' => 'buy', 'schedule' => false]);
+        Transaction::factory()
+            ->for($user)
+            ->for(TransactionDetailInvestment::factory()->for($investment)->for($account, 'account')->state(['price' => 40]), 'config')
+            ->create(['date' => '2024-01-15', 'transaction_type' => 'buy', 'schedule' => false]);
+
+        $service = $this->createService(new InvestmentPriceProviderRegistry());
+        $asOf = Carbon::parse('2024-01-15');
+
+        $this->assertSame(40.0, $service->getLatestPrice($investment, 'combined', $asOf));
+        $batchResults = $service->getLatestPricesBatch(collect([
+            ['investment' => $investment, 'date' => $asOf],
+        ]));
+        $this->assertSame(40.0, $batchResults[$service->priceBatchKey($investment->id, $asOf)]);
+    }
+
     public function test_get_latest_price_returns_null_when_none_found(): void
     {
         $user = User::factory()->create();
