@@ -1,5 +1,7 @@
 # Portfolio Intelligence: capability audit and delivery specification
 
+> **Status (13 November 2026):** this is the pre-implementation audit and is kept as a dated record; the evidence links point at the audited commit. Delivery steps 1–4 and the TWR half of step 5 are now implemented on `feat/portfolio-valuation` — see the as-built docs in [`.ai/docs/features/portfolio-intelligence/`](../../features/portfolio-intelligence/SPECIFICATION.md). Superseded details: investment quantity is now stored as `decimal(20,10)` (not `decimal(14,4)`), and the branch names in the text predate the split into `feat/investment-quantity-precision` and `feat/portfolio-valuation`.
+
 ## Feature Summary
 
 YAFFA already records investment activity, holdings, prices, investment groups, cash balances, budgets and forecasts. Portfolio Intelligence extends these foundations with reconciled portfolio valuation, clearly defined returns, allocation and consolidated wealth reporting.
