@@ -34,7 +34,7 @@
   import 'datatables.net-bs5/css/dataTables.bootstrap5.min.css';
 
   import * as dataTableHelpers from '@/shared/lib/datatable';
-  import { __, toFormattedNumber } from '@/shared/lib/i18n';
+  import { __, toFormattedQuantity } from '@/shared/lib/i18n';
   import TransactionTable from '@/shared/ui/datatable/TransactionTable.vue';
 
   export default {
@@ -76,7 +76,7 @@
             title: __('Quantity'),
             render: function (data) {
               return data !== null && data !== ''
-                ? toFormattedNumber(data, vm.locale)
+                ? toFormattedQuantity(data, vm.locale)
                 : '';
             },
           },

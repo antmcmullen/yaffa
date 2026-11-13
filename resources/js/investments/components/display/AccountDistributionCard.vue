@@ -19,7 +19,7 @@
   import {
     __,
     toFormattedCurrency,
-    toFormattedNumber,
+    toFormattedQuantity,
   } from '@/shared/lib/i18n';
   import {
     applyAmChartsColorTheme,
@@ -47,10 +47,7 @@
             name: account.name,
             // Chart share only; exact values are formatted from the decimal string
             quantity: Number(account.quantity),
-            quantityText: toFormattedNumber(account.quantity, this.locale, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 4,
-            }),
+            quantityText: toFormattedQuantity(account.quantity, this.locale),
             valueText:
               this.investment.latest_price == null
                 ? __('Not set')

@@ -194,7 +194,7 @@
     __,
     toFormattedCurrency,
     toFormattedDate,
-    toFormattedNumber,
+    toFormattedQuantity,
   } from '@/shared/lib/i18n';
 
   export default {
@@ -235,13 +235,9 @@
           return __('Not set');
         }
 
-        return toFormattedNumber(
+        return toFormattedQuantity(
           this.transaction.config.quantity,
           this.locale,
-          {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 4,
-          },
         );
       },
     },

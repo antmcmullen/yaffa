@@ -82,7 +82,7 @@ class InvestmentService
 
                 // Decimal strings, like the Money/Decimal casts serialize on every API response
                 $investment->setAttribute('price', $price === null ? null : (string) BigDecimal::of($price));
-                $investment->setAttribute('quantity', (string) BigDecimal::of($investment->getAttribute('quantity')));
+                $investment->setAttribute('quantity', (string) BigDecimal::of($investment->getAttribute('quantity'))->toScale(10));
                 $investment->makeHidden(['stored_price', 'stored_price_date', 'transaction_price', 'transaction_price_date']);
             });
     }
@@ -345,9 +345,9 @@ class InvestmentService
      *
      * @param  Investment  $investment  The investment to calculate quantity for
      * @param  AccountEntity|null  $account  Optional account filter
-     * @return float The current quantity
+     * @return string The exact current quantity, as a scale-10 decimal string
      */
-    public function getCurrentQuantity(Investment $investment, ?AccountEntity $account = null): float
+    public function getCurrentQuantity(Investment $investment, ?AccountEntity $account = null): string
     {
         $quantity = DB::table('transactions')
             ->select(
@@ -372,7 +372,7 @@ class InvestmentService
             })
             ->get();
 
-        return $quantity->first()->quantity ?? 0;
+        return (string) BigDecimal::of($quantity->first()->quantity ?? 0)->toScale(10);
     }
 
     /**

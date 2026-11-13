@@ -7,7 +7,7 @@ import {
   __,
   getDataTablesLanguageOptions,
   toFormattedCurrency,
-  toFormattedNumber,
+  toFormattedQuantity,
 } from '@/shared/lib/i18n';
 import * as toastHelpers from '@/shared/lib/toast';
 import { confirmDelete } from '@/shared/lib/confirm';
@@ -60,14 +60,7 @@ let table = $('#investmentSummary').DataTable({
       title: __('Quantity'),
       render: function (data, type) {
         if (type === 'display') {
-          return toFormattedNumber(
-            Number(data),
-            window.YAFFA.userSettings.locale,
-            {
-              maximumFractionDigits: 2,
-              useGrouping: true,
-            },
-          );
+          return toFormattedQuantity(data, window.YAFFA.userSettings.locale);
         }
         return Number(data);
       },

@@ -11,6 +11,26 @@ use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
+test('summary and current holdings retain ten quantity decimal places', function () {
+    $user = User::factory()->create();
+    $investment = Investment::factory()->withUser($user)->create();
+    Transaction::factory()->add_shares($user, [
+        'investment_id' => $investment->id,
+        'quantity' => '9999999999.1234567891',
+    ])->create();
+    Transaction::factory()->remove_shares($user, [
+        'investment_id' => $investment->id,
+        'quantity' => '0.0000000001',
+    ])->create();
+
+    Sanctum::actingAs($user, ['read']);
+    $this->getJson(route('api.v1.investments.summary'))->assertOk()
+        ->assertJsonPath('data.0.quantity', '9999999999.1234567890');
+
+    expect(app(InvestmentService::class)->getCurrentQuantity($investment))
+        ->toBe('9999999999.1234567890');
+});
+
 test('summary defaults to active investments and scopes every filter to its owner', function () {
     $user = User::factory()->create();
     $active = Investment::factory()->withUser($user)->create(['active' => true]);
@@ -20,7 +40,7 @@ test('summary defaults to active investments and scopes every filter to its owne
 
     $this->getJson(route('api.v1.investments.summary'))->assertOk()
         ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $active->id)
-        ->assertJsonPath('data.0.quantity', '0.0000')->assertJsonPath('data.0.price', null);
+        ->assertJsonPath('data.0.quantity', '0.0000000000')->assertJsonPath('data.0.price', null);
     $this->getJson(route('api.v1.investments.summary', ['active' => '0']))->assertOk()
         ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $inactive->id);
     $this->getJson(route('api.v1.investments.summary', ['active' => 'all']))->assertOk()
@@ -74,7 +94,7 @@ test('summary uses stored prices for investments without transactions', function
 
     $this->getJson(route('api.v1.investments.summary'))->assertOk()
         ->assertJsonPath('data.0.price', fn ($p) => is_string($p) && (float) $p === 25.0)
-        ->assertJsonPath('data.0.quantity', '0.0000');
+        ->assertJsonPath('data.0.quantity', '0.0000000000');
 });
 
 test('summary query count stays constant as investments are added', function () {

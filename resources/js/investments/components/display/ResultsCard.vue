@@ -131,7 +131,7 @@
 </template>
 
 <script>
-  import { toFormattedCurrency, toFormattedNumber } from '@/shared/lib/i18n';
+  import { toFormattedCurrency, toFormattedQuantity } from '@/shared/lib/i18n';
   import * as toastHelpers from '@/shared/lib/toast';
   import { getTransactionTypeConfig } from '@/shared/lib/helpers';
   import { computeInvestmentReturn } from '@/investments/lib/investmentReturn';
@@ -348,10 +348,7 @@
       toFormattedCurrency,
       formatQuantity(value) {
         if (value === 0) return '0';
-        return toFormattedNumber(value, this.locale, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 4,
-        });
+        return toFormattedQuantity(value, this.locale);
       },
       resetDates() {
         const { from, to } = computeDateBounds(this.transactions);

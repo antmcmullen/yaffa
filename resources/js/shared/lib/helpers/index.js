@@ -214,7 +214,7 @@ export function processTransaction(transaction) {
       );
     } else if (transaction.config_type === 'investment') {
       transaction.config.price = toNumberOrNull(transaction.config.price);
-      transaction.config.quantity = toNumberOrNull(transaction.config.quantity);
+      // Keep quantities as decimal strings so editing a saved quantity cannot lose digits.
       transaction.config.commission = toNumberOrNull(
         transaction.config.commission,
       );

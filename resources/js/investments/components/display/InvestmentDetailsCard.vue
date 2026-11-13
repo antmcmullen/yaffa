@@ -112,7 +112,7 @@
   import {
     __,
     toFormattedCurrency,
-    toFormattedNumber,
+    toFormattedQuantity,
   } from '@/shared/lib/i18n';
 
   export default {
@@ -134,10 +134,7 @@
         if (value === 0) {
           return '0';
         }
-        return toFormattedNumber(value, this.locale, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 4,
-        });
+        return toFormattedQuantity(value, this.locale);
       },
       __,
       getEditUrl() {
