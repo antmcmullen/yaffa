@@ -8,7 +8,7 @@ See [SPECIFICATION.md](SPECIFICATION.md) for the feature description.
 | --- | --- | --- |
 | Route (web) | `GET /reports/portfolio-valuation` → `reports.portfolio-valuation` (`Route::view`, `auth` + `verified`) | Renders the report page; breadcrumb Home › Reports › Portfolio valuation; linked from the Reports menu. |
 | Route (API) | `GET /api/v1/reports/portfolio-valuation` → `api.v1.reports.portfolio-valuation` | Valuation + TWR series. |
-| Controller | `API\PortfolioValuationApiController::series()` | Thin: validates, loads the owned currency, calls the two services, attaches each date's TWR result to its valuation point. Throws `LogicException` if a point has no return result (internal invariant). |
+| Controller | `API\PortfolioValuationApiController::series()` | Thin: validates, loads the owned currency, calls `PortfolioTimeWeightedReturnService::valuationsWithReturns()` once, attaches each date's TWR result to its valuation point. Throws `LogicException` if a point has no return result (internal invariant). |
 | Request | `API\PortfolioValuationRequest` | `account_ids`: present, list of distinct integers (may be empty). `currency_id`: required, owned by the user. `dates`: required list of 1–31 distinct `Y-m-d` dates. |
 | Service | `PortfolioValuationService` | `series(user, accountIds, currency, dates)` — one valuation per date. `convertCashflowAmount()` — FX conversion used by TWR. |
 | Service | `PortfolioCashflowService` | `externalCashflows()` and `unclassifiedShareAdjustments()` for the selected accounts and a date window. |
@@ -69,4 +69,8 @@ See [SPECIFICATION.md](SPECIFICATION.md) for the feature description.
 
 ## Performance notes
 
-- Each valuation date re-queries transactions up to that date; a 12-point request performs roughly 12 × (standard + investment transaction loads) plus one batched price lookup per date. Acceptable for personal datasets; no pagination or caching exists.
+- `valuationsWithReturns()` values the requested dates **and** every external-cashflow date in one `PortfolioValuationService::series()` call, so the history is loaded once per request.
+- `series()` loads recorded standard and investment transactions once (up to the latest date), replays them in date/id order and snapshots cash, positions and cashflow gaps at each date. Output order matches valuing each date independently (positions and cashflow gaps ordered by first transaction id).
+- Prices: one batched lookup for all distinct (investment, date) pairs; `InvestmentService::latestOnOrBefore()` binary-searches the date/id-ordered histories.
+- FX: each currency pair's rate history is loaded once per service instance and binary-searched; the base currency and currency-ownership checks are memoised.
+- Measured on a 101-account, 17.6k-transaction dataset with 305 cashflow dates in the year (remote MySQL, memory-starved host): the request went from more than 25 minutes (gateway 504) to about 16 s with 59 queries. Remaining cost is hydrating the full history and building ~300 points; nothing is cached or persisted. A persisted daily valuation cache (invalidated by transaction/price/rate changes) is the next step if this is still too slow; the existing monthly summaries are unsuitable (month-end only, no price/FX provenance, unpriced holdings skipped).

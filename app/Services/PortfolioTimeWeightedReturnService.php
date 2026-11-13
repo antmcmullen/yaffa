@@ -21,9 +21,83 @@ class PortfolioTimeWeightedReturnService
     }
 
     /**
+     * Value the portfolio at the requested dates and compute their time-weighted returns,
+     * valuing the requested dates and every external-cashflow date in one pass.
+     *
+     * Use this instead of PortfolioValuationService::series() followed by series(): that
+     * pairing values the history twice (once for the report dates, once for flow dates).
+     *
+     * @param array<int, int> $accountEntityIds
+     * @param array<int, Carbon> $dates
+     * @return array{valuations: array<int, array<string, mixed>>, returns: array<int, array<string, mixed>>}
+     */
+    public function valuationsWithReturns(
+        User $user,
+        array $accountEntityIds,
+        Currency $currency,
+        array $dates,
+    ): array {
+        if ($dates === []) {
+            return ['valuations' => [], 'returns' => []];
+        }
+
+        $sorted = array_map(static fn (Carbon $date): Carbon => $date->copy()->startOfDay(), $dates);
+        usort($sorted, static fn (Carbon $left, Carbon $right): int => $left <=> $right);
+        $firstDate = $sorted[0];
+        $lastDate = $sorted[count($sorted) - 1];
+
+        $flows = $firstDate->lessThan($lastDate)
+            ? $this->portfolioCashflowService->externalCashflows(
+                $user,
+                $accountEntityIds,
+                $firstDate->copy()->addDay(),
+                $lastDate,
+            )
+            : [];
+
+        $requiredDates = [];
+        foreach ($dates as $date) {
+            $requiredDates[$date->toDateString()] = $date->copy()->startOfDay();
+        }
+        foreach ($flows as $flow) {
+            $requiredDates[$flow['date']] ??= Carbon::parse($flow['date'])->startOfDay();
+        }
+
+        $valuationByDate = [];
+        foreach ($this->portfolioValuationService->series(
+            $user,
+            $accountEntityIds,
+            $currency,
+            array_values($requiredDates),
+        ) as $valuation) {
+            $valuationByDate[$valuation['date']] = $valuation;
+        }
+
+        $reportValuations = array_map(
+            static fn (Carbon $date): array => $valuationByDate[$date->toDateString()],
+            $dates,
+        );
+
+        return [
+            'valuations' => $reportValuations,
+            'returns' => $this->series(
+                $user,
+                $accountEntityIds,
+                $currency,
+                $dates,
+                $reportValuations,
+                $valuationByDate,
+                $flows,
+            ),
+        ];
+    }
+
+    /**
      * @param array<int, int> $accountEntityIds
      * @param array<int, Carbon> $dates
      * @param array<int, array<string, mixed>> $reportValuations
+     * @param array<string, array<string, mixed>> $knownValuations Valuations already computed, keyed by date, so flow dates are not valued again.
+     * @param array<int, array<string, mixed>>|null $knownFlows External cashflows already loaded for the same range.
      * @return array<int, array{
      *     date: string,
      *     period_start_date: string|null,
@@ -39,18 +113,22 @@ class PortfolioTimeWeightedReturnService
         Currency $currency,
         array $dates,
         array $reportValuations,
+        array $knownValuations = [],
+        ?array $knownFlows = null,
     ): array {
         if (count($dates) !== count($reportValuations)) {
             throw new LogicException('Portfolio valuation dates and points must have matching lengths.');
         }
 
         $dateValues = [];
-        $valuationByDate = [];
+        $valuationByDate = $knownValuations;
+        $requestedDates = [];
         foreach ($dates as $index => $date) {
             $dateString = $date->toDateString();
-            if (isset($valuationByDate[$dateString])) {
+            if (isset($requestedDates[$dateString])) {
                 throw new LogicException('Portfolio return dates must be unique.');
             }
+            $requestedDates[$dateString] = true;
 
             $dateValues[] = $date->copy()->startOfDay();
             $valuationByDate[$dateString] = $reportValuations[$index];
@@ -63,14 +141,14 @@ class PortfolioTimeWeightedReturnService
 
         $firstDate = $dateValues[0];
         $lastDate = $dateValues[count($dateValues) - 1];
-        $flows = $firstDate->lessThan($lastDate)
+        $flows = $knownFlows ?? ($firstDate->lessThan($lastDate)
             ? $this->portfolioCashflowService->externalCashflows(
                 $user,
                 $accountEntityIds,
                 $firstDate->copy()->addDay(),
                 $lastDate,
             )
-            : [];
+            : []);
         $adjustments = $firstDate->lessThan($lastDate)
             ? $this->portfolioCashflowService->unclassifiedShareAdjustments(
                 $user,

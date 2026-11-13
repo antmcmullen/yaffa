@@ -23,6 +23,15 @@ use LogicException;
 
 class PortfolioValuationService
 {
+    /** @var array<string, true> Currency pairs already confirmed as owned by the user. */
+    private array $verifiedCurrencyPairs = [];
+
+    /** @var array<string, array<int, CurrencyRate>> Rate history per "from|to" pair, ordered by date. */
+    private array $rateHistory = [];
+
+    /** @var array<int, Currency|null> */
+    private array $baseCurrencies = [];
+
     public function __construct(
         private readonly InvestmentService $investmentService,
         private readonly TransactionService $transactionService,
@@ -56,58 +65,13 @@ class PortfolioValuationService
             ->where('user_id', $user->id)
             ->firstOrFail();
 
-        return array_map(
-            fn (Carbon $date): array => $this->valueAt($user, $accounts, $outputCurrency, $date),
-            $dates,
-        );
-    }
-
-    public function convertCashflowAmount(
-        User $user,
-        string $amount,
-        Currency $fromCurrency,
-        Currency $toCurrency,
-        Carbon $date,
-    ): ?BigDecimal {
-        $currencies = Currency::query()
-            ->where('user_id', $user->id)
-            ->whereIn('id', [$fromCurrency->id, $toCurrency->id])
-            ->get();
-        if ($currencies->count() !== count(array_unique([$fromCurrency->id, $toCurrency->id]))) {
-            throw new ModelNotFoundException('A portfolio cashflow currency does not belong to this user.');
+        if ($dates === []) {
+            return [];
         }
 
-        $fx = $this->resolveFxRate($user, $fromCurrency, $toCurrency, $date->copy()->startOfDay());
-        if ($fx === null) {
-            return null;
-        }
-
-        return BigDecimal::of($amount)->multipliedBy($fx['rate']);
-    }
-
-    /**
-     * @param EloquentCollection<int, AccountEntity> $accounts
-     * @return array<string, mixed>
-     */
-    private function valueAt(User $user, EloquentCollection $accounts, Currency $outputCurrency, Carbon $date): array
-    {
-        $asOfDate = $date->copy()->startOfDay();
         $accountIds = $accounts->modelKeys();
-        $cashBalances = [];
+        $openingBalances = [];
         $accountCurrencies = [];
-        $components = [];
-        $missingInputs = [];
-        $knownValue = BigDecimal::zero();
-        $fxCache = [];
-        $resolveFx = function (Currency $from) use (&$fxCache, $user, $outputCurrency, $asOfDate): ?array {
-            $key = $from->id . '|' . $outputCurrency->id;
-            if (! array_key_exists($key, $fxCache)) {
-                $fxCache[$key] = $this->resolveFxRate($user, $from, $outputCurrency, $asOfDate);
-            }
-
-            return $fxCache[$key];
-        };
-
         foreach ($accounts as $account) {
             $accountConfig = $account->config;
             if (! $accountConfig instanceof Account) {
@@ -119,15 +83,121 @@ class PortfolioValuationService
                 throw new ModelNotFoundException('A selected account uses a currency owned by another user.');
             }
             $accountCurrencies[$account->id] = $accountCurrency;
-            $cashBalances[$account->id] = $accountConfig->opening_balance->getAmount();
+            $openingBalances[$account->id] = $accountConfig->opening_balance->getAmount();
         }
+
+        // Every requested date is answered from one chronological pass over the recorded
+        // transactions up to the latest date, instead of reloading the history per date.
+        $dateStrings = array_values(array_unique(array_map(
+            static fn (Carbon $date): string => $date->copy()->startOfDay()->toDateString(),
+            $dates,
+        )));
+        sort($dateStrings);
+        $lastDate = Carbon::parse($dateStrings[count($dateStrings) - 1])->startOfDay();
+
+        $snapshots = $this->snapshotsAt(
+            $user,
+            $accountIds,
+            $accountCurrencies,
+            $openingBalances,
+            $lastDate,
+            $dateStrings,
+        );
+
+        // One price lookup per (investment, date): the same security held in several
+        // accounts needs only one price.
+        $priceRequests = collect();
+        $requestedPrices = [];
+        foreach ($snapshots as $dateString => $snapshot) {
+            $asOfDate = Carbon::parse($dateString)->startOfDay();
+            foreach ($snapshot['positions'] as $position) {
+                $requestKey = $position['investment']->id . '|' . $dateString;
+                if (! $position['quantity']->isZero() && ! isset($requestedPrices[$requestKey])) {
+                    $requestedPrices[$requestKey] = true;
+                    $priceRequests->push(['investment' => $position['investment'], 'date' => $asOfDate]);
+                }
+            }
+        }
+        $priceEvidenceByInvestmentDate = $this->investmentService->getLatestPricesEvidenceBatch($priceRequests);
+
+        $points = [];
+        foreach ($snapshots as $dateString => $snapshot) {
+            $points[$dateString] = $this->buildPoint(
+                $user,
+                $accounts,
+                $accountCurrencies,
+                $outputCurrency,
+                Carbon::parse($dateString)->startOfDay(),
+                $snapshot,
+                $priceEvidenceByInvestmentDate,
+            );
+        }
+
+        return array_map(
+            static fn (Carbon $date): array => $points[$date->copy()->startOfDay()->toDateString()],
+            $dates,
+        );
+    }
+
+    public function convertCashflowAmount(
+        User $user,
+        string $amount,
+        Currency $fromCurrency,
+        Currency $toCurrency,
+        Carbon $date,
+    ): ?BigDecimal {
+        $ownershipKey = $user->id . '|' . $fromCurrency->id . '|' . $toCurrency->id;
+        if (! isset($this->verifiedCurrencyPairs[$ownershipKey])) {
+            $currencies = Currency::query()
+                ->where('user_id', $user->id)
+                ->whereIn('id', [$fromCurrency->id, $toCurrency->id])
+                ->get();
+            if ($currencies->count() !== count(array_unique([$fromCurrency->id, $toCurrency->id]))) {
+                throw new ModelNotFoundException('A portfolio cashflow currency does not belong to this user.');
+            }
+            $this->verifiedCurrencyPairs[$ownershipKey] = true;
+        }
+
+        $fx = $this->resolveFxRate($user, $fromCurrency, $toCurrency, $date->copy()->startOfDay());
+        if ($fx === null) {
+            return null;
+        }
+
+        return BigDecimal::of($amount)->multipliedBy($fx['rate']);
+    }
+
+    /**
+     * Replay recorded cash and quantity movements once, capturing the state at each date.
+     *
+     * Components keep the order a per-date query would have produced (first transaction id),
+     * so results are identical to valuing each date independently.
+     *
+     * @param array<int, int> $accountIds
+     * @param array<int, Currency> $accountCurrencies
+     * @param array<int, BigDecimal> $openingBalances
+     * @param array<int, string> $dateStrings Sorted, unique Y-m-d dates.
+     * @return array<string, array{
+     *     cash: array<int, BigDecimal>,
+     *     positions: array<int, array{account_id: int, investment: Investment, quantity: BigDecimal}>,
+     *     cashflow_missing: array<int, array{account_id: int, kind: string}>
+     * }>
+     */
+    private function snapshotsAt(
+        User $user,
+        array $accountIds,
+        array $accountCurrencies,
+        array $openingBalances,
+        Carbon $lastDate,
+        array $dateStrings,
+    ): array {
+        $events = [];
 
         $standardTransactions = Transaction::query()
             ->where('user_id', $user->id)
             ->where('config_type', 'standard')
             ->where('schedule', false)
             ->whereNotNull('date')
-            ->whereDate('date', '<=', $asOfDate)
+            ->whereDate('date', '<=', $lastDate)
             ->whereHasMorph(
                 'config',
                 [TransactionDetailStandard::class],
@@ -146,7 +216,7 @@ class PortfolioValuationService
             ]);
 
         foreach ($standardTransactions as $transaction) {
-            $this->applyStandardCashMovement($transaction, $accountIds, $cashBalances);
+            $events[] = ['date' => $transaction->date->toDateString(), 'id' => $transaction->id, 'transaction' => $transaction];
         }
 
         $investmentTransactions = Transaction::query()
@@ -154,7 +224,7 @@ class PortfolioValuationService
             ->where('config_type', 'investment')
             ->where('schedule', false)
             ->whereNotNull('date')
-            ->whereDate('date', '<=', $asOfDate)
+            ->whereDate('date', '<=', $lastDate)
             ->whereHasMorph(
                 'config',
                 [TransactionDetailInvestment::class],
@@ -163,60 +233,127 @@ class PortfolioValuationService
             ->with(['config.account.config.currency', 'config.investment.currency'])
             ->get();
 
-        $positionQuantities = [];
-
         foreach ($investmentTransactions as $transaction) {
-            $detail = $transaction->config;
-            if (! $detail instanceof TransactionDetailInvestment) {
-                continue;
-            }
-
-            $investment = $detail->investment;
-            if ($investment->user_id !== $user->id) {
-                throw new ModelNotFoundException('A selected account references an investment owned by another user.');
-            }
-            $investmentCurrency = $investment->currency;
-            if ($investmentCurrency->user_id !== $user->id) {
-                throw new ModelNotFoundException('A selected account references an investment currency owned by another user.');
-            }
-
-            $accountId = $detail->account_id;
-            $accountCurrency = $accountCurrencies[$accountId];
-            $cashFlow = $this->transactionService->getTransactionCashFlow($transaction);
-
-            if ($cashFlow instanceof Money) {
-                if ($cashFlow->getCurrency()->getCurrencyCode() !== $accountCurrency->iso_code) {
-                    $missingInputs[] = ['account_id' => $accountId, 'kind' => 'cashflow'];
-                } else {
-                    $cashBalances[$accountId] = $cashBalances[$accountId]->plus($cashFlow->getAmount());
-                }
-            } elseif ($this->hasCashflowTerms($transaction, $detail)) {
-                $missingInputs[] = ['account_id' => $accountId, 'kind' => 'cashflow'];
-            }
-
-            $multiplier = $transaction->transaction_type->quantityMultiplier();
-            if ($multiplier === null || $detail->quantity === null) {
-                continue;
-            }
-
-            $key = $accountId . '|' . $investment->id;
-            $positionQuantities[$key] ??= [
-                'account_id' => $accountId,
-                'investment' => $investment,
-                'quantity' => BigDecimal::zero(),
-            ];
-            $positionQuantities[$key]['quantity'] = $positionQuantities[$key]['quantity']
-                ->plus($detail->quantity->multipliedBy((string) $multiplier));
+            $events[] = ['date' => $transaction->date->toDateString(), 'id' => $transaction->id, 'transaction' => $transaction];
         }
 
-        $priceRequests = collect($positionQuantities)
-            ->filter(fn (array $position): bool => ! $position['quantity']->isZero())
-            ->map(fn (array $position): array => [
-                'investment' => $position['investment'],
-                'date' => $asOfDate,
-            ])
-            ->values();
-        $priceEvidenceByInvestmentDate = $this->investmentService->getLatestPricesEvidenceBatch($priceRequests);
+        usort($events, static fn (array $left, array $right): int => [$left['date'], $left['id']] <=> [$right['date'], $right['id']]);
+
+        $cashBalances = $openingBalances;
+        $positions = [];
+        $positionFirstId = [];
+        $cashflowMissing = [];
+        $snapshots = [];
+        $eventIndex = 0;
+        $eventCount = count($events);
+
+        foreach ($dateStrings as $dateString) {
+            while ($eventIndex < $eventCount && $events[$eventIndex]['date'] <= $dateString) {
+                $transaction = $events[$eventIndex]['transaction'];
+                $eventIndex++;
+
+                if ($transaction->config instanceof TransactionDetailStandard) {
+                    $this->applyStandardCashMovement($transaction, $accountIds, $cashBalances);
+                    continue;
+                }
+
+                $detail = $transaction->config;
+                if (! $detail instanceof TransactionDetailInvestment) {
+                    continue;
+                }
+
+                $investment = $detail->investment;
+                if ($investment->user_id !== $user->id) {
+                    throw new ModelNotFoundException('A selected account references an investment owned by another user.');
+                }
+                if ($investment->currency->user_id !== $user->id) {
+                    throw new ModelNotFoundException('A selected account references an investment currency owned by another user.');
+                }
+
+                $accountId = $detail->account_id;
+                $cashFlow = $this->transactionService->getTransactionCashFlow($transaction);
+
+                if ($cashFlow instanceof Money) {
+                    if ($cashFlow->getCurrency()->getCurrencyCode() !== $accountCurrencies[$accountId]->iso_code) {
+                        $cashflowMissing[$transaction->id] = ['account_id' => $accountId, 'kind' => 'cashflow'];
+                    } else {
+                        $cashBalances[$accountId] = $cashBalances[$accountId]->plus($cashFlow->getAmount());
+                    }
+                } elseif ($this->hasCashflowTerms($transaction, $detail)) {
+                    $cashflowMissing[$transaction->id] = ['account_id' => $accountId, 'kind' => 'cashflow'];
+                }
+
+                $multiplier = $transaction->transaction_type->quantityMultiplier();
+                if ($multiplier === null || $detail->quantity === null) {
+                    continue;
+                }
+
+                $key = $accountId . '|' . $investment->id;
+                if (! isset($positions[$key])) {
+                    $positions[$key] = [
+                        'account_id' => $accountId,
+                        'investment' => $investment,
+                        'quantity' => BigDecimal::zero(),
+                    ];
+                    $positionFirstId[$key] = $transaction->id;
+                } elseif ($transaction->id < $positionFirstId[$key]) {
+                    $positionFirstId[$key] = $transaction->id;
+                }
+                $positions[$key]['quantity'] = $positions[$key]['quantity']
+                    ->plus($detail->quantity->multipliedBy((string) $multiplier));
+            }
+
+            $orderedPositions = $positions;
+            uksort(
+                $orderedPositions,
+                static fn (string $left, string $right): int => $positionFirstId[$left] <=> $positionFirstId[$right],
+            );
+            $orderedMissing = $cashflowMissing;
+            ksort($orderedMissing);
+
+            $snapshots[$dateString] = [
+                'cash' => $cashBalances,
+                'positions' => array_values($orderedPositions),
+                'cashflow_missing' => array_values($orderedMissing),
+            ];
+        }
+
+        return $snapshots;
+    }
+
+    /**
+     * @param EloquentCollection<int, AccountEntity> $accounts
+     * @param array<int, Currency> $accountCurrencies
+     * @param array{
+     *     cash: array<int, BigDecimal>,
+     *     positions: array<int, array{account_id: int, investment: Investment, quantity: BigDecimal}>,
+     *     cashflow_missing: array<int, array{account_id: int, kind: string}>
+     * } $snapshot
+     * @param array<string, array{price: BigDecimal, source_kind: 'stored'|'transaction', source_id: int, date: string}|null> $priceEvidenceByInvestmentDate
+     * @return array<string, mixed>
+     */
+    private function buildPoint(
+        User $user,
+        EloquentCollection $accounts,
+        array $accountCurrencies,
+        Currency $outputCurrency,
+        Carbon $asOfDate,
+        array $snapshot,
+        array $priceEvidenceByInvestmentDate,
+    ): array {
+        $cashBalances = $snapshot['cash'];
+        $components = [];
+        $missingInputs = $snapshot['cashflow_missing'];
+        $knownValue = BigDecimal::zero();
+        $fxCache = [];
+        $resolveFx = function (Currency $from) use (&$fxCache, $user, $outputCurrency, $asOfDate): ?array {
+            $key = $from->id . '|' . $outputCurrency->id;
+            if (! array_key_exists($key, $fxCache)) {
+                $fxCache[$key] = $this->resolveFxRate($user, $from, $outputCurrency, $asOfDate);
+            }
+
+            return $fxCache[$key];
+        };
 
         foreach ($accounts as $account) {
             $cashAmount = $cashBalances[$account->id];
@@ -259,7 +396,7 @@ class PortfolioValuationService
             ];
         }
 
-        foreach ($positionQuantities as $position) {
+        foreach ($snapshot['positions'] as $position) {
             /** @var Investment $investment */
             $investment = $position['investment'];
             /** @var BigDecimal $quantity */
@@ -439,7 +576,10 @@ class PortfolioValuationService
             ];
         }
 
-        $baseCurrency = $user->baseCurrency();
+        if (! array_key_exists($user->id, $this->baseCurrencies)) {
+            $this->baseCurrencies[$user->id] = $user->baseCurrency();
+        }
+        $baseCurrency = $this->baseCurrencies[$user->id];
         if ($baseCurrency === null) {
             return null;
         }
@@ -474,14 +614,39 @@ class PortfolioValuationService
         ];
     }
 
+    /**
+     * Latest rate for the pair dated on or before $date. The pair's history is loaded once
+     * and searched in memory, because a series asks for the same pairs at many dates.
+     */
     private function latestRate(int $fromId, int $toId, Carbon $date): ?CurrencyRate
     {
-        return CurrencyRate::query()
-            ->where('from_id', $fromId)
-            ->where('to_id', $toId)
-            ->whereDate('date', '<=', $date)
-            ->orderByDesc('date')
-            ->first();
+        $key = $fromId . '|' . $toId;
+        if (! isset($this->rateHistory[$key])) {
+            $this->rateHistory[$key] = CurrencyRate::query()
+                ->where('from_id', $fromId)
+                ->where('to_id', $toId)
+                ->orderBy('date')
+                ->orderBy('id')
+                ->get()
+                ->all();
+        }
+
+        $history = $this->rateHistory[$key];
+        $target = $date->toDateString();
+        $low = 0;
+        $high = count($history) - 1;
+        $found = null;
+        while ($low <= $high) {
+            $middle = intdiv($low + $high, 2);
+            if ($history[$middle]->date->toDateString() <= $target) {
+                $found = $history[$middle];
+                $low = $middle + 1;
+            } else {
+                $high = $middle - 1;
+            }
+        }
+
+        return $found;
     }
 
     /**

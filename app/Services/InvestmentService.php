@@ -802,7 +802,29 @@ class InvestmentService
             return $items->last();
         }
 
-        return $items->last(fn ($item) => $item->date <= $onOrBefore);
+        // Items are ordered by date then id (every caller loads them that way), so the last
+        // item dated on or before the boundary can be found by binary search. A linear scan
+        // made batch lookups cost O(history) per request, which dominated long portfolio series.
+        $list = $items->all();
+        if (! array_is_list($list)) {
+            $list = array_values($list);
+        }
+
+        $boundary = $onOrBefore->getTimestamp();
+        $low = 0;
+        $high = count($list) - 1;
+        $found = null;
+        while ($low <= $high) {
+            $middle = intdiv($low + $high, 2);
+            if ($list[$middle]->date->getTimestamp() <= $boundary) {
+                $found = $list[$middle];
+                $low = $middle + 1;
+            } else {
+                $high = $middle - 1;
+            }
+        }
+
+        return $found;
     }
 
     private function extractTransactionPrice(?Transaction $transaction): ?BigDecimal

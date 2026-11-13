@@ -7,7 +7,6 @@ use App\Http\Requests\API\PortfolioValuationRequest;
 use App\Models\Currency;
 use App\Models\User;
 use App\Services\PortfolioTimeWeightedReturnService;
-use App\Services\PortfolioValuationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Attributes\Controllers\Middleware;
@@ -19,7 +18,6 @@ use LogicException;
 class PortfolioValuationApiController extends Controller
 {
     public function __construct(
-        private readonly PortfolioValuationService $portfolioValuationService,
         private readonly PortfolioTimeWeightedReturnService $portfolioTimeWeightedReturnService,
     ) {
     }
@@ -42,20 +40,15 @@ class PortfolioValuationApiController extends Controller
             static fn (string $date): Carbon => Carbon::parse($date),
             $dates,
         );
-        $series = $this->portfolioValuationService->series(
+        // One pass values the report dates and every cashflow date the returns need.
+        $result = $this->portfolioTimeWeightedReturnService->valuationsWithReturns(
             $user,
             $accountEntityIds,
             $currency,
             $valuationDates,
         );
-        $timeWeightedReturns = $this->portfolioTimeWeightedReturnService->series(
-            $user,
-            $accountEntityIds,
-            $currency,
-            $valuationDates,
-            $series,
-        );
-        $returnsByDate = collect($timeWeightedReturns)->keyBy('date');
+        $series = $result['valuations'];
+        $returnsByDate = collect($result['returns'])->keyBy('date');
 
         foreach ($series as &$point) {
             if (! $returnsByDate->has($point['date'])) {
