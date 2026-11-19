@@ -64,13 +64,29 @@
       },
       tableColumns() {
         const vm = this;
+        const typeColumn =
+          dataTableHelpers.transactionColumnDefinition.type(false);
+
         return [
           dataTableHelpers.transactionColumnDefinition.dateFromCustomField(
             'date',
             __('Date'),
             this.locale,
           ),
-          dataTableHelpers.transactionColumnDefinition.type(false),
+          {
+            ...typeColumn,
+            render(data, type, row) {
+              const transactionType = typeColumn.render(data, type, row);
+
+              if (type === 'display' && row.schedule) {
+                return `${transactionType} <span class="badge bg-info">${__(
+                  'Projected',
+                )}</span>`;
+              }
+
+              return transactionType;
+            },
+          },
           {
             data: 'config.quantity',
             title: __('Quantity'),

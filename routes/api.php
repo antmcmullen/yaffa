@@ -30,6 +30,7 @@ use App\Http\Controllers\API\PayeeApiController;
 use App\Http\Controllers\API\PayeeStatsApiController;
 use App\Http\Controllers\API\RechargeApiController;
 use App\Http\Controllers\API\ReferenceDataApiController;
+use App\Http\Controllers\API\PortfolioValuationApiController;
 use App\Http\Controllers\API\ReportApiController;
 use App\Http\Controllers\API\SummaryApiController;
 use App\Http\Controllers\API\TagApiController;
@@ -368,6 +369,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         ->name('transactions.destroy');
 
     // Report endpoints
+    Route::get('/reports/portfolio-valuation', [PortfolioValuationApiController::class, 'series'])
+        ->name('reports.portfolio-valuation');
     Route::get('/reports/budget-chart', [ReportApiController::class, 'budgetChart'])
         ->name('reports.budget-chart');
     Route::get('/reports/cashflow', [ReportApiController::class, 'getCashflowData'])

@@ -1,29 +1,69 @@
 import Decimal from 'decimal.js';
 
+export function getRecordedTransactions(transactions) {
+  return transactions.filter((transaction) => transaction.schedule !== true);
+}
+
+export function computeDateBounds(transactions, today = new Date()) {
+  const todayDate = new Date(today);
+  todayDate.setUTCHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayDate);
+  todayEnd.setUTCHours(23, 59, 59, 999);
+  const recordedDates = getRecordedTransactions(transactions)
+    .map((transaction) => {
+      const date = new Date(transaction.date);
+      if (!Number.isFinite(date.getTime())) return NaN;
+      date.setUTCHours(0, 0, 0, 0);
+      return date.getTime();
+    })
+    .filter((date) => Number.isFinite(date) && date <= todayEnd.getTime());
+
+  return {
+    from: recordedDates.length
+      ? new Date(Math.min(...recordedDates))
+      : todayDate,
+    to: todayDate,
+  };
+}
+
 /**
- * Latest known price at or before `date` - "last known value carried forward", the convention
- * used for every as-of valuation here (never peeks at a later price). Falls back to a buy/sell
- * transaction's own recorded price when no investment-price-history entry qualifies. Returns
- * null when neither source has anything at or before `date` - the caller must treat that as
- * "unknown", never substitute a guessed value.
+ * Latest known recorded price at or before `date` - "last known value carried forward", the
+ * convention used for every as-of valuation here (never peeks at a later price). A recorded
+ * transaction wins a same-date tie with stored price history. Returns null when neither source
+ * has anything at or before `date` - the caller must treat that as "unknown", never guess.
  */
 export function priceAsOf(date, prices, transactions) {
   const time = date.getTime();
 
-  const fromHistory = prices
-    .filter((p) => new Date(p.date).getTime() <= time)
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
-  if (fromHistory.length > 0) {
-    return new Decimal(fromHistory[0].price || 0);
+  const latestAsOf = (items, getPrice) =>
+    items
+      .filter(
+        (item) =>
+          getPrice(item) != null && new Date(item.date).getTime() <= time,
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.date).getTime() - new Date(a.date).getTime() ||
+          Number(b.id ?? 0) - Number(a.id ?? 0),
+      )[0] ?? null;
+
+  const storedPrice = latestAsOf(prices, (price) => price.price);
+  const transactionPrice = latestAsOf(
+    transactions.filter((transaction) => transaction.schedule !== true),
+    (transaction) => transaction.config?.price,
+  );
+
+  if (
+    transactionPrice &&
+    (!storedPrice ||
+      new Date(transactionPrice.date).getTime() >=
+        new Date(storedPrice.date).getTime())
+  ) {
+    return new Decimal(transactionPrice.config.price);
   }
 
-  const fromTransactions = transactions
-    .filter(
-      (t) => t.config?.price != null && new Date(t.date).getTime() <= time,
-    )
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
-  if (fromTransactions.length > 0) {
-    return new Decimal(fromTransactions[0].config.price);
+  if (storedPrice) {
+    return new Decimal(storedPrice.price);
   }
 
   return null;
@@ -77,6 +117,7 @@ export function computeInvestmentReturn({
   dateTo,
   getTypeConfig,
 }) {
+  transactions = getRecordedTransactions(transactions);
   const periodMs = dateTo - dateFrom;
   const inWindow = transactions.filter((t) => {
     const d = new Date(t.date);

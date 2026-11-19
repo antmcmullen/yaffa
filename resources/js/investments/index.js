@@ -11,6 +11,7 @@ import {
 } from '@/shared/lib/i18n';
 import * as toastHelpers from '@/shared/lib/toast';
 import { confirmDelete } from '@/shared/lib/confirm';
+import { getInvestmentValue } from '@/investments/lib/valuation';
 
 let ajaxIsBusy = false;
 let summaryRequest;
@@ -71,7 +72,11 @@ let table = $('#investmentSummary').DataTable({
       data: 'price',
       title: __('Latest price'),
       render: function (data, type, row) {
-        if (type === 'display' && data !== null) {
+        if (data == null) {
+          return type === 'display' ? __('Not set') : null;
+        }
+
+        if (type === 'display') {
           return toFormattedCurrency(
             Number(data),
             window.YAFFA.userSettings.locale,
@@ -89,9 +94,13 @@ let table = $('#investmentSummary').DataTable({
       defaultContent: '',
       title: __('Value'),
       render: function (_data, type, row) {
-        const value = row.quantity * row.price;
+        const value = getInvestmentValue(row.quantity, row.price);
 
         if (type === 'display') {
+          if (value == null) {
+            return __('Not set');
+          }
+
           return toFormattedCurrency(
             value,
             window.YAFFA.userSettings.locale,
@@ -121,6 +130,14 @@ let table = $('#investmentSummary').DataTable({
   ],
   order: [[0, 'asc']],
   initComplete: function (settings) {
+    const scrollBody = this.api()
+      .table()
+      .container()
+      .querySelector('.dt-scroll-body');
+    scrollBody.tabIndex = 0;
+    scrollBody.setAttribute('role', 'region');
+    scrollBody.setAttribute('aria-label', __('Scrollable investment holdings'));
+
     $(settings.table).on(
       'click',
       'td.activeIcon > i:not(.inProgress)',
@@ -219,6 +236,7 @@ let table = $('#investmentSummary').DataTable({
   },
   deferRender: true,
   scrollY: '500px',
+  scrollX: true,
   scrollCollapse: true,
   stateSave: false,
   processing: true,

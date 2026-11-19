@@ -6,7 +6,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  computeDateBounds,
   computeInvestmentReturn,
+  getRecordedTransactions,
   priceAsOf,
   quantityBefore,
 } from './investmentReturn.js';
@@ -396,6 +398,73 @@ test('priceAsOf: falls back to a transaction price when no price-history entry q
   assert.equal(p.toNumber(), 9.5);
 });
 
+test('priceAsOf: selects the newest stored or recorded trade price without looking ahead', () => {
+  const p = priceAsOf(
+    day(10),
+    [
+      { id: 1, date: day(5), price: '9' },
+      { id: 2, date: day(8), price: '10' },
+      { id: 3, date: day(11), price: '99' },
+    ],
+    [
+      tx('buy', day(7), { price: '11', quantity: 1 }),
+      tx('buy', day(8), { price: '12', quantity: 1 }),
+      tx('buy', day(12), { price: '99', quantity: 1 }),
+    ],
+  );
+  assert.equal(p.toNumber(), 12);
+});
+
+test('priceAsOf: prefers a newer stored price over an older recorded trade', () => {
+  const p = priceAsOf(
+    day(10),
+    [{ id: 1, date: day(9), price: '13' }],
+    [tx('buy', day(8), { price: '12', quantity: 1 })],
+  );
+  assert.equal(p.toNumber(), 13);
+});
+
+test('priceAsOf: picks the highest-id trade on a shared date and ignores scheduled instances', () => {
+  const p = priceAsOf(
+    day(10),
+    [{ id: 99, date: day(10), price: '20' }],
+    [
+      { ...tx('buy', day(10), { price: '15', quantity: 1 }), id: 4 },
+      { ...tx('buy', day(10), { price: '16', quantity: 1 }), id: 5 },
+      {
+        ...tx('buy', day(10), { price: '100', quantity: 1 }),
+        id: 6,
+        schedule: true,
+      },
+    ],
+  );
+  assert.equal(p.toNumber(), 16);
+});
+
+test('priceAsOf: preserves stored-only, trade-only, known-zero and missing-price results', () => {
+  assert.equal(
+    priceAsOf(day(10), [{ id: 1, date: day(5), price: 0 }], []).toNumber(),
+    0,
+  );
+  assert.equal(
+    priceAsOf(
+      day(10),
+      [],
+      [tx('buy', day(5), { price: '7.25', quantity: 1 })],
+    ).toNumber(),
+    7.25,
+  );
+  assert.equal(priceAsOf(day(10), [], []), null);
+  assert.equal(
+    priceAsOf(
+      day(10),
+      [],
+      [{ ...tx('buy', day(11), { price: 10 }), schedule: true }],
+    ),
+    null,
+  );
+});
+
 test('quantityBefore: excludes transactions on or after the boundary date', () => {
   const q = quantityBefore(
     day(10),
@@ -406,4 +475,74 @@ test('quantityBefore: excludes transactions on or after the boundary date', () =
     getTypeConfig,
   );
   assert.equal(q.toNumber(), 3);
+});
+
+test('recorded transaction filtering excludes generated schedule instances but keeps recorded occurrences', () => {
+  const recorded = tx('buy', day(4), { price: 10, quantity: 2 });
+  const scheduled = {
+    ...tx('buy', day(5), { price: 10, quantity: 100 }),
+    schedule: true,
+  };
+
+  assert.deepEqual(getRecordedTransactions([recorded, scheduled]), [recorded]);
+});
+
+test('default result bounds use recorded activity only', () => {
+  const bounds = computeDateBounds(
+    [
+      tx('buy', day(3), { price: 10, quantity: 1 }),
+      { ...tx('buy', day(1), { price: 10, quantity: 100 }), schedule: true },
+    ],
+    day(20),
+  );
+
+  assert.equal(bounds.from.getTime(), day(3).getTime());
+  assert.equal(bounds.to.getTime(), day(20).getTime());
+});
+
+test('default result bounds do not start in the future when only future records exist', () => {
+  const bounds = computeDateBounds(
+    [tx('buy', day(21), { price: 10, quantity: 1 })],
+    day(20),
+  );
+
+  assert.equal(bounds.from.getTime(), day(20).getTime());
+});
+
+test('investment returns exclude scheduled occurrences even when they fall in the selected period', () => {
+  const r = run({
+    dateFrom: day(1),
+    dateTo: day(10),
+    transactions: [
+      tx('buy', new Date('2025-12-01'), { price: 10, quantity: 10 }),
+      {
+        ...tx('buy', day(5), { price: 10, quantity: 100 }),
+        schedule: true,
+      },
+      tx('buy', day(6), { price: 10, quantity: 2 }),
+    ],
+    prices: [{ date: day(10), price: 10 }],
+  });
+
+  assert.equal(r.closingQuantity.toNumber(), 12);
+  assert.equal(r.buying.toNumber(), 20);
+});
+
+test('a recorded transaction replaces a projected occurrence on the same date', () => {
+  const r = run({
+    dateFrom: day(1),
+    dateTo: day(10),
+    transactions: [
+      tx('buy', new Date('2025-12-01'), { price: 10, quantity: 10 }),
+      tx('buy', day(5), { price: 10, quantity: 2 }),
+      {
+        ...tx('buy', day(5), { price: 10, quantity: 2 }),
+        schedule: true,
+      },
+    ],
+    prices: [{ date: day(10), price: 10 }],
+  });
+
+  assert.equal(r.closingQuantity.toNumber(), 12);
+  assert.equal(r.buying.toNumber(), 20);
 });

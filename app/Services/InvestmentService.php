@@ -422,6 +422,94 @@ class InvestmentService
     }
 
     /**
+     * Resolve prices with source evidence for many investment/date pairs.
+     *
+     * @param Collection<int, array{investment: Investment, date: Carbon}> $requests
+     * @return array<string, array{price: BigDecimal, source_kind: 'stored'|'transaction', source_id: int, date: string}|null>
+     */
+    public function getLatestPricesEvidenceBatch(Collection $requests): array
+    {
+        if ($requests->isEmpty()) {
+            return [];
+        }
+
+        $investmentIds = $requests->pluck('investment.id')->unique()->values();
+        $lastDate = $requests->max(fn (array $request): Carbon => $request['date']);
+
+        $storedPricesByInvestment = InvestmentPrice::query()
+            ->whereIn('investment_id', $investmentIds)
+            ->whereDate('date', '<=', $lastDate)
+            ->orderBy('date')
+            ->orderBy('id')
+            ->get(['id', 'investment_id', 'date', 'price'])
+            ->groupBy('investment_id');
+
+        $pricedTransactionsByInvestment = Transaction::query()
+            ->with('config')
+            ->where('schedule', false)
+            ->whereNotNull('date')
+            ->whereDate('date', '<=', $lastDate)
+            ->whereHasMorph(
+                'config',
+                [TransactionDetailInvestment::class],
+                fn (Builder $query) => $query->whereIn('investment_id', $investmentIds)
+                    ->whereNotNull('price'),
+            )
+            ->orderBy('date')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (Transaction $transaction): bool => $transaction->config instanceof TransactionDetailInvestment)
+            ->groupBy(function (Transaction $transaction): int {
+                /** @var TransactionDetailInvestment $config */
+                $config = $transaction->config;
+
+                return $config->investment_id;
+            });
+
+        $results = [];
+
+        foreach ($requests as $request) {
+            $investment = $request['investment'];
+            $date = $request['date'];
+            $key = $this->priceBatchKey($investment->id, $date);
+            if (array_key_exists($key, $results)) {
+                continue;
+            }
+
+            $storedPrice = $this->latestOnOrBefore($storedPricesByInvestment->get($investment->id), $date);
+            $storedPrice = $storedPrice instanceof InvestmentPrice ? $storedPrice : null;
+            $storedPrice?->setRelation('investment', $investment);
+
+            $transaction = $this->latestOnOrBefore($pricedTransactionsByInvestment->get($investment->id), $date);
+            $transaction = $transaction instanceof Transaction ? $transaction : null;
+            if ($transaction?->config instanceof TransactionDetailInvestment) {
+                $transaction->config->setRelation('investment', $investment);
+            }
+
+            if ($storedPrice instanceof InvestmentPrice
+                && (! ($transaction instanceof Transaction) || $storedPrice->date > $transaction->date)) {
+                $results[$key] = [
+                    'price' => $storedPrice->price->getAmount(),
+                    'source_kind' => 'stored',
+                    'source_id' => $storedPrice->id,
+                    'date' => $storedPrice->date->format('Y-m-d'),
+                ];
+            } elseif ($transaction instanceof Transaction && $transaction->config instanceof TransactionDetailInvestment) {
+                $results[$key] = [
+                    'price' => $transaction->config->price->getAmount(),
+                    'source_kind' => 'transaction',
+                    'source_id' => $transaction->id,
+                    'date' => $transaction->date->format('Y-m-d'),
+                ];
+            } else {
+                $results[$key] = null;
+            }
+        }
+
+        return $results;
+    }
+
+    /**
      * Get latest stored price from investment_prices table
      *
      * @param  Investment  $investment  The investment to get price for
@@ -436,6 +524,7 @@ class InvestmentService
                 $query->where('date', '<=', $onOrBefore);
             })
             ->latest('date')
+            ->orderByDesc('id')
             ->first();
     }
 
@@ -465,6 +554,7 @@ class InvestmentService
                 $query->where('date', '<=', $onOrBefore);
             })
             ->latest('date')
+            ->orderByDesc('id')
             ->first();
     }
 
@@ -565,6 +655,7 @@ class InvestmentService
 
         $storedPricesByInvestment = InvestmentPrice::whereIn('investment_id', $investmentIds)
             ->orderBy('date')
+            ->orderBy('id')
             ->get(['investment_id', 'date', 'price'])
             ->groupBy('investment_id');
 
@@ -579,6 +670,7 @@ class InvestmentService
                 }
             )
             ->orderBy('date')
+            ->orderBy('id')
             ->get()
             ->filter(function (Transaction $transaction) {
                 $config = $transaction->config;
@@ -710,7 +802,29 @@ class InvestmentService
             return $items->last();
         }
 
-        return $items->last(fn ($item) => $item->date <= $onOrBefore);
+        // Items are ordered by date then id (every caller loads them that way), so the last
+        // item dated on or before the boundary can be found by binary search. A linear scan
+        // made batch lookups cost O(history) per request, which dominated long portfolio series.
+        $list = $items->all();
+        if (! array_is_list($list)) {
+            $list = array_values($list);
+        }
+
+        $boundary = $onOrBefore->getTimestamp();
+        $low = 0;
+        $high = count($list) - 1;
+        $found = null;
+        while ($low <= $high) {
+            $middle = intdiv($low + $high, 2);
+            if ($list[$middle]->date->getTimestamp() <= $boundary) {
+                $found = $list[$middle];
+                $low = $middle + 1;
+            } else {
+                $high = $middle - 1;
+            }
+        }
+
+        return $found;
     }
 
     private function extractTransactionPrice(?Transaction $transaction): ?BigDecimal
