@@ -58,6 +58,12 @@ class PortfolioValuationService
      */
     public function series(User $user, array $accountEntityIds, Currency $currency, array $dates): array
     {
+        // The memos only live for one series and the conversions that follow it, so a
+        // reused service instance never answers from rates or currencies that changed since.
+        $this->verifiedCurrencyPairs = [];
+        $this->rateHistory = [];
+        $this->baseCurrencies = [];
+
         $accountEntityIds = array_values(array_unique($accountEntityIds));
         $accounts = $this->getOwnedAccounts($user, $accountEntityIds);
         $outputCurrency = Currency::query()
